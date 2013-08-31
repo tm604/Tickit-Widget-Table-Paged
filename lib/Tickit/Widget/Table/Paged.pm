@@ -51,7 +51,8 @@ BEGIN {
 		'<Home>'             => 'first_row',
 		'<End>'              => 'last_row',
 		'<Left>'             => 'previous_column',
-		'<Right>'            => 'next_column';
+		'<Right>'            => 'next_column',
+		'<Enter>'            => 'activate';
 }
 
 =head1 METHODS
@@ -267,6 +268,11 @@ sub expose_rows {
 	), @_;
 }
 
+sub highlight_row {
+	my $self = shift;
+	return $self->{highlight_row};
+}
+
 sub highlight_visible_row {
 	my $self = shift;
 	return $self->{highlight_row} - $self->row_offset;
@@ -402,6 +408,14 @@ sub scroll_dimension {
 	$win->lines - 2;
 }
 
+sub clear {
+	my $self = shift;
+	$self->{data} = [];
+	$self->{highlight_row} = 0;
+	$self->redraw;
+	$self
+}
+
 sub add_row {
 	my $self = shift;
 	push @{$self->{data}}, [ @_ ];
@@ -432,6 +446,18 @@ sub key_next_column { }
 sub key_previous_column { }
 sub key_first_column { }
 sub key_last_column { }
+
+sub on_key { warn "on_key with @_\n"; 0 }
+
+sub key_activate {
+	my $self = shift;
+	warn "activate!";
+	$self->{on_activate}->(
+		$self->highlight_row,
+		$self->{data}[$self->highlight_row]
+	) if $self->{on_activate};
+	$self
+}
 
 1;
 
