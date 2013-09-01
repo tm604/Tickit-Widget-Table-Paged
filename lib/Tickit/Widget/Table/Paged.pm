@@ -107,14 +107,14 @@ sub render_header {
 	$rb->goto(0, 0);
 	for (@{$self->{column_layout}}) {
 		if(($_->{type} // '') eq 'padding') {
-			$rb->erase($_->{value}, $self->get_style_pen('padding'));
+			$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
 		} else {
 			$_->{style} = $self->get_style_pen('header');
 			local $_->{text} = $_->{label} // '';
 			$self->render_cell($rb, $_);
 		}
 	}
-	$rb->erase(1, $self->get_style_pen('header')) if $self->vscroll;
+	$rb->text(' ', $self->get_style_pen('header')) if $self->vscroll;
 }
 
 sub render_to_rb {
@@ -152,7 +152,7 @@ sub render_body {
 			}
 
 			if($_->{type} eq 'padding') {
-				$rb->erase($_->{value}, $self->get_style_pen('padding'));
+				$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
 			} else {
 				$_->{style} = $self->get_style_pen(($y == $highlight_pos) ? 'highlight' : undef);
 				local $_->{text} = shift @col_text;
@@ -206,9 +206,9 @@ sub render_cell {
 	   : $args->{text};
 
 	my ($pre, undef, $post) = align textwidth($txt), $args->{value}, $args->{align};
-	$rb->erase($pre, $args->{style}) if $pre;
+	$rb->text(' ' x $pre, $args->{style}) if $pre;
 	$rb->text($txt, $args->{style});
-	$rb->erase($post, $args->{style}) if $post;
+	$rb->text(' ' x $post, $args->{style}) if $post;
 	return $self;
 }
 
