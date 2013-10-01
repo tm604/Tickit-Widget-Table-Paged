@@ -69,9 +69,9 @@ BEGIN {
 		scroll_b             => 1,
 		scroll_fg            => 'white',
 		scroll_bg            => 'black',
-		scroll_line_style    => 'block';
-
-	style_definition ':focus' =>
+#		scroll_line_style    => 'block';
+#
+#	style_definition ':focus' =>
 		'<Up>'               => 'previous_row',
 		'<Down>'             => 'next_row',
 		'<PageUp>'           => 'previous_page',
