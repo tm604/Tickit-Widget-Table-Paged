@@ -2,5 +2,11 @@ Revision history for {{$dist->name}}
 
 {{$NEXT}}
 
+0.002     2013-11-10 01:26:54 Europe/London
+	New features:
+	* Allow setting on_activate at instantiation or via accessor
+	(previously had to set ->{on_activate} manually)
+	* Multiselection support (disabled by default)
+
 0.001     2013-09-15 02:55:07 Europe/London
 	Initial CPAN release

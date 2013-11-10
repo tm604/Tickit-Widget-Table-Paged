@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use parent qw(Tickit::Widget);
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 
 =head1 NAME
 
@@ -61,6 +61,9 @@ BEGIN {
 		highlight_b          => 1,
 		highlight_fg         => 'yellow',
 		highlight_bg         => 'blue',
+		selected_b           => 1,
+		selected_fg          => 'white',
+		selected_bg          => 'red',
 		header_b             => 1,
 		header_fg            => 'blue',
 		scrollbar_fg         => 'white',
@@ -80,8 +83,17 @@ BEGIN {
 		'<End>'              => 'last_row',
 		'<Left>'             => 'previous_column',
 		'<Right>'            => 'next_column',
+		'<Space>'            => 'select_toggle',
 		'<Enter>'            => 'activate';
 }
+
+my %ALIGNMENT_TYPE = (
+	left   => 0,
+	right  => 1,
+	centre => 0.5,
+	center => 0.5,
+	middle => 0.5,
+);
 
 =head1 METHODS
 
@@ -95,10 +107,127 @@ Instantiate. Will attempt to take focus.
 
 sub new {
 	my $class = shift;
+	my %args = @_;
+	my $on_activate = delete $args{on_activate};
+	my $multi_select = delete $args{multi_select};
 	my $self = $class->SUPER::new(@_);
+	$self->on_activate($on_activate) if $on_activate;
+	$self->multi_select($multi_select);
 	$self->take_focus;
 	$self
 }
+
+=head1 METHODS - Table content
+
+=head2 clear
+
+Clear all data in the table.
+
+=cut
+
+sub clear {
+	my $self = shift;
+	$self->{data} = [];
+	$self->{highlight_row} = 0;
+	$self->redraw;
+	$self
+}
+
+=head2 add_row
+
+Add a row to the table. Data should be provided as a list with one item per
+column.
+
+Returns $self.
+
+=cut
+
+sub add_row {
+	my $self = shift;
+	push @{$self->{data}}, [ @_ ];
+	$self
+}
+
+=head2 add_column
+
+Add a new column. Takes the following named parameters:
+
+=over 4
+
+=item * width - (optional) number of columns
+
+=item * type - (optional) data type, currently only supports 'text' (the default)
+
+=item * align - (optional) align left, center or right
+
+=back
+
+Returns $self.
+
+=cut
+
+sub add_column {
+	my $self = shift;
+	my %args = @_;
+	# delete $args{width} if $args{width} eq 'auto';
+	@args{qw(base expand)} = (0,1) unless exists $args{width};
+	$args{fixed} = delete $args{width} if looks_like_number($args{width});
+	$args{type} ||= 'text';
+	$args{align} = $ALIGNMENT_TYPE{$args{align} || 0};
+	push @{$self->{columns}}, \%args;
+	$self
+}
+
+=head1 METHODS - Callbacks
+
+=head2 on_activate
+
+Accessor for the activation callback - if called without parameters,
+will return the current coderef (if any), otherwise, will set the new
+callback.
+
+This callback will be triggered via L</key_activate>:
+
+ $code->($row_index, $row_data_as_arrayref)
+
+If multiselect is enabled, the callback will have the following:
+
+ $code->(
+   [$highlight_row_index, @selected_row_indices],
+   $highlight_row_data_as_arrayref,
+   @selected_rows_as_arrayrefs
+ )
+
+(the selected row data + index list could be empty here)
+
+=cut
+
+sub on_activate {
+	my $self = shift;
+	if(@_) {
+		$self->{on_activate} = shift;
+		return $self;
+	}
+	return $self->{on_activate}
+}
+
+=head2 multi_select
+
+Accessor for multi_select mode - when set, this allows multiple rows
+to be selected.
+
+=cut
+
+sub multi_select {
+	my $self = shift;
+	if(@_) {
+		$self->{multi_select} = shift;
+		return $self;
+	}
+	return $self->{multi_select} ? 1 : 0
+}
+
+=head1 METHODS - Other
 
 =head2 lines
 
@@ -264,7 +393,13 @@ sub render_body {
 			if($_->{type} eq 'padding') {
 				$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
 			} else {
-				$_->{style} = $self->get_style_pen(($y == $highlight_pos) ? 'highlight' : undef);
+				$_->{style} = $self->get_style_pen(
+					($y == $highlight_pos)
+					? 'highlight'
+					: ($self->multi_select && $self->{selected}{$y + $self->row_offset - 1})
+					? 'selected'
+					: undef
+				);
 				local $_->{text} = shift @col_text;
 				$self->render_cell($rb, $_);
 			}
@@ -442,21 +577,6 @@ sub highlight_visible_row {
 	return $self->{highlight_row} - $self->row_offset;
 }
 
-=head2 key_previous_row
-
-Go to the previous row.
-
-=cut
-
-sub key_previous_row {
-	my $self = shift;
-	return $self unless my $win = $self->window;
-	return $self if $self->{highlight_row} <= 0;
-
-	return $self->move_highlight(1) if $self->highlight_visible_row >= 1;
-	return $self->scroll_highlight(1);
-}
-
 =head2 scroll_highlight
 
 Update scroll information after changing highlight position.
@@ -502,6 +622,21 @@ sub move_highlight {
 	}
 	$win->expose($_) for $self->expose_rows($old, $self->highlight_visible_row);
 	$self
+}
+
+=head2 key_previous_row
+
+Go to the previous row.
+
+=cut
+
+sub key_previous_row {
+	my $self = shift;
+	return $self unless my $win = $self->window;
+	return $self if $self->{highlight_row} <= 0;
+
+	return $self->move_highlight(1) if $self->highlight_visible_row >= 1;
+	return $self->scroll_highlight(1);
 }
 
 =head2 key_next_row
@@ -652,58 +787,6 @@ sub scroll_dimension {
 	$win->lines - 2;
 }
 
-=head2 clear
-
-Clear all data in the table.
-
-=cut
-
-sub clear {
-	my $self = shift;
-	$self->{data} = [];
-	$self->{highlight_row} = 0;
-	$self->redraw;
-	$self
-}
-
-=head2 add_row
-
-Add a row to the table.
-
-=cut
-
-sub add_row {
-	my $self = shift;
-	push @{$self->{data}}, [ @_ ];
-	$self
-}
-
-my %ALIGNMENT_TYPE = (
-	left   => 0,
-	right  => 1,
-	centre => 0.5,
-	center => 0.5,
-	middle => 0.5,
-);
-
-=head2 add_column
-
-Add a new column. Takes some parameters.
-
-=cut
-
-sub add_column {
-	my $self = shift;
-	my %args = @_;
-	# delete $args{width} if $args{width} eq 'auto';
-	@args{qw(base expand)} = (0,1) unless exists $args{width};
-	$args{fixed} = delete $args{width} if looks_like_number($args{width});
-	$args{type} ||= 'text';
-	$args{align} = $ALIGNMENT_TYPE{$args{align} || 0};
-	push @{$self->{columns}}, \%args;
-	$self
-}
-
 =head2 key_next_column
 
 Move to the next column.
@@ -744,10 +827,35 @@ Activate the highlighted item.
 
 sub key_activate {
 	my $self = shift;
-	$self->{on_activate}->(
-		$self->highlight_row,
-		$self->{data}[$self->highlight_row]
-	) if $self->{on_activate};
+	if(my $code = $self->{on_activate}) {
+		my $idx = $self->highlight_row;
+		if($self->multi_select) {
+			my @selected = sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}};
+			$code->(
+				[ $idx, @selected ],
+				$self->{data}[$idx],
+				@{$self->{data}}[@selected]
+			);
+		} else {
+			$code->(
+				$idx,
+				$self->{data}[$idx],
+			);
+		}
+	}
+	$self
+}
+
+=head2 key_select_toggle
+
+Toggle selected row.
+
+=cut
+
+sub key_select_toggle {
+	my $self = shift;
+	return $self unless $self->multi_select;
+	$self->{selected}{$self->highlight_row} = $self->{selected}{$self->highlight_row} ? 0 : 1;
 	$self
 }
 
@@ -768,8 +876,6 @@ it's reliable enough for release, so this version only has basic arrayref
 support.
 
 =item * Column and cell highlighting modes
-
-=item * Multiselection
 
 =item * Proper widget-in-cell support
 
