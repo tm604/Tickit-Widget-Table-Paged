@@ -598,10 +598,15 @@ sub scroll_highlight {
 		++$self->{highlight_row};
 		++$self->{row_offset};
 	}
-	$redraw_rect->add($self->active_scrollbar_rect->translate($up ? -1 : 1, 0));
+
+	my $direction = $up ? -1 : 1;
+	$redraw_rect->add($self->active_scrollbar_rect->translate($direction, 0));
 	$redraw_rect->add($_) for $self->expose_rows($old, $self->highlight_visible_row);
-	$win->scrollrect(1, 0, $win->lines, $win->cols, $up ? -1 : 1, 0);
-	$win->expose($_) for map $_->translate($up ? 1 : -1, 0), $redraw_rect->rects;
+
+	# FIXME We're assuming the header is 1 row in height here (and elsewhere),
+	# this seems like an arbitrary restriction.
+	$win->scrollrect(1, 0, $win->lines - 1, $win->cols, $direction, 0);
+	$win->expose($_) for map $_->translate(-$direction, 0), $redraw_rect->rects;
 }
 
 =head2 move_highlight
@@ -881,6 +886,8 @@ support.
 
 =item * Formatters for converting raw cell data into printable format
 (without having to go through a separate widget)
+
+=item * Better header support (more than one row, embedded widgets)
 
 =back
 
