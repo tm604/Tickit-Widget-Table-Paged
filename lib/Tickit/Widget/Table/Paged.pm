@@ -588,9 +588,10 @@ sub scroll_highlight {
 	my $up = shift;
 	return $self unless my $win = $self->window;
 
+	return $self unless my $scrollbar_rect = $self->active_scrollbar_rect;
 	my $old = $self->highlight_visible_row;
 	my $redraw_rect = Tickit::RectSet->new;
-	$redraw_rect->add($self->active_scrollbar_rect);
+	$redraw_rect->add($scrollbar_rect);
 	if($up) {
 		--$self->{highlight_row};
 		--$self->{row_offset};
@@ -600,7 +601,7 @@ sub scroll_highlight {
 	}
 
 	my $direction = $up ? -1 : 1;
-	$redraw_rect->add($self->active_scrollbar_rect->translate($direction, 0));
+	$redraw_rect->add($scrollbar_rect->translate($direction, 0));
 	$redraw_rect->add($_) for $self->expose_rows($old, $self->highlight_visible_row);
 
 	# FIXME We're assuming the header is 1 row in height here (and elsewhere),
@@ -757,7 +758,6 @@ sub scroll_rows {
 	my $cur = $self->scroll_position;
 	my $ext = $self->scroll_dimension;
 	my $max = $self->row_count - $ext;
-	return if $max < $ext;
 	return unless $max;
 	my $y = floor(0.5 + ($cur * ($ext - $self->sb_height) / $max));
 	return $y, $y + $self->sb_height;
