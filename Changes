@@ -1,6 +1,11 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+	New features:
+	* ->data method returns the arrayref holding table data
+	* ->selected_rows returns all selected rows (highlighted row only
+	if we're not in multiselect mode). (both features thanks to a patch
+	from buu)
 
 0.003     2014-04-22 02:02:25+01:00 Europe/London
 	No new features.
