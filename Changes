@@ -1,6 +1,12 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+	No new features.
+
+	Bugs fixed:
+	* Fixed off-by-one on scrollrect (thanks LeoNerd)
+	* An exception could be raised when scrolling off the end of a list,
+	due to incorrect scrollbar height calculation (thanks buu)
 
 0.002     2013-11-10 01:26:54 Europe/London
 	New features:
