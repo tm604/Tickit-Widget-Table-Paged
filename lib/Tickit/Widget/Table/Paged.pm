@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use parent qw(Tickit::Widget);
 
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 
 =head1 NAME
 
@@ -119,6 +119,20 @@ sub new {
 
 =head1 METHODS - Table content
 
+=head2 data
+
+Returns the table's current data content as an arrayref.
+
+Note that it is not recommended to make any changes to this
+data structure - you are responsible for triggering any
+necessary redrawing or resizing logic if you choose to do so.
+
+=cut
+
+sub data {
+	shift->{data}
+}
+
 =head2 clear
 
 Clear all data in the table.
@@ -176,6 +190,25 @@ sub add_column {
 	$args{align} = $ALIGNMENT_TYPE{$args{align} || 0};
 	push @{$self->{columns}}, \%args;
 	$self
+}
+
+=head2 selected_rows
+
+Returns the selected row, or multiple rows as a list if multi_select is enabled.
+If multi_select is enabled it does not return the row currently highlighted (unless that row is also selected).
+
+=cut
+
+sub selected_rows {
+	my $self = shift;
+
+	if($self->multi_select) {
+		my @selected = sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}};
+		return @{$self->data}[@selected];
+	} else {
+		my $idx = $self->highlight_row;
+		return $self->data->[$idx];
+	}
 }
 
 =head1 METHODS - Callbacks
