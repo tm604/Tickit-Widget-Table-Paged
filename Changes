@@ -10,7 +10,8 @@ Revision history for {{$dist->name}}
 	* Avoid warnings when no alignment is specified (default is 'left')
 	* Fix numeric alignment (can now use 0.5, 1.0 etc. as originally
 	intended, previously it had to be 'centre', 'right' etc.)
-	* Scrollbar rendering - sometimes extended into header
+	* Scrollbar rendering - sometimes this extended into header due
+	to incorrect ratio calculation
 
 0.004     2014-04-22 02:33:42+01:00 Europe/London
 	New features:

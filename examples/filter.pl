@@ -8,30 +8,20 @@ vbox {
 	my $tbl;
 	entry {
 		my ($entry, $search) = @_;
-		warn "search [$search]\n";
 		$static->set_text("Search for [$search]");
 		my $re = qr/$search/i;
 		$tbl->filter(sub { shift->[0] =~ $re });
 		$tbl->unselect_hidden_rows;
 	};
-	$static = static 'hi';
+	$static = static 'Press TAB to switch between table and input box';
 	$tbl = customwidget {
 		my $w = Tickit::Widget::Table::Paged->new(
 			multi_select => 1,
 		);
 		$w->add_column(
-			label => 'Module',
+			label => 'Item',
 		);
-		$w->add_column(
-			label => 'Current',
-		);
-		$w->add_column(
-			label => 'Latest',
-		);
-		$w->add_row( 'IO::Async', '0.4', '0.52');
-		$w->add_row( 'IO::Async::SSL', '0.4', '0.52');
-		$w->add_row( 'Future', '0.4', '0.52');
-		$w->add_row( 'bigrat', '0.4', '0.52');
+		$w->add_row($_) for qw(One Two Three Four Five Six Seven Eight Nine Ten);
 		$w
 	} expand => 1;
 };
