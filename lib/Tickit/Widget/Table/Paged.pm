@@ -459,6 +459,9 @@ Render the body area.
 sub render_body {
 	my ($self, $rb, $rect) = @_;
 	return $self unless my $win = $self->window;
+
+	# Need a mapping from actual rows to visible content
+
 	my $highlight_pos = 1 + $self->highlight_visible_row;
 	my @visible = (undef, $self->visible_lines);
 	LINE:
@@ -532,6 +535,17 @@ sub render_scrollbar {
 	my $cols = $win->cols - 1;
 
 	my $h = $win->lines - 1;
+
+	# Need to clear any line content first, since we may be overwriting part of
+	# the previous scrollbar rendering here
+	$rb->eraserect(
+		Tickit::Rect->new(
+			top => 1,
+			left => $cols,
+			right => $cols,
+			bottom => $h,
+		)
+	);
 	if(my ($min, $max) = map 1 + $_, $self->scroll_rows) {
 	# warn "sb min: $min, max $max h $h\n";
 		# Scrollbar should be shown, since we don't have all rows visible on the screen at once
