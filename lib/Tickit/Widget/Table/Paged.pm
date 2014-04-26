@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use parent qw(Tickit::Widget);
 
-our $VERSION = '0.004';
+our $VERSION = '0.005';
 
 =head1 NAME
 
@@ -87,6 +87,7 @@ BEGIN {
 		'<Enter>'            => 'activate';
 }
 
+# Allow more descriptive terms for column alignment
 my %ALIGNMENT_TYPE = (
 	left   => 0,
 	right  => 1,
@@ -111,6 +112,8 @@ sub new {
 	my $on_activate = delete $args{on_activate};
 	my $multi_select = delete $args{multi_select};
 	my $self = $class->SUPER::new(@_);
+	$self->{columns} = [];
+	$self->{highlight_row} = 0;
 	$self->on_activate($on_activate) if $on_activate;
 	$self->multi_select($multi_select);
 	$self->take_focus;
@@ -162,6 +165,48 @@ sub add_row {
 	$self
 }
 
+=head2 update_row
+
+Replaces the values in a row with the given list.
+
+Takes the row index (from 0) as the first parameter, with the
+remaining parameters being the new cell values for this row.
+
+Will throw an exception if the row is not already present in
+the table.
+
+Returns $self.
+
+=cut
+
+sub update_row {
+	my ($self, $idx, @cols) = @_;
+	die "row out of bounds" unless $self->{data}[$idx];
+	$self->{data}[$idx][$_] = $cols[$_] for 0..$#cols;
+	$self->apply_filters_to_row($idx);
+	$self->expose_row($idx);
+	$self
+}
+
+sub delete_row {
+	my ($self, $idx) = @_;
+	my $visible = $self->is_row_visible($idx);
+	splice $self->{data}, $idx, 1;
+	$self->redraw if $visible;
+	$self;
+}
+
+sub is_row_visible {
+	my $self = shift;
+	1
+}
+
+sub expose_row {
+	my $self = shift;
+	$self->redraw if $self->is_row_visible;
+	return $self;
+}
+
 =head2 add_column
 
 Add a new column. Takes the following named parameters:
@@ -187,7 +232,8 @@ sub add_column {
 	@args{qw(base expand)} = (0,1) unless exists $args{width};
 	$args{fixed} = delete $args{width} if looks_like_number($args{width});
 	$args{type} ||= 'text';
-	$args{align} = $ALIGNMENT_TYPE{$args{align} || 0};
+	$args{align} = $ALIGNMENT_TYPE{$args{align}} if defined($args{align}) && exists $ALIGNMENT_TYPE{$args{align}};
+	$args{align} ||= 0;
 	push @{$self->{columns}}, \%args;
 	$self
 }
@@ -280,7 +326,8 @@ sub cols { 1 }
 
 =head2 vscroll
 
-True if there's a vertical scrollbar.
+True if there's a vertical scrollbar (currently there is no way to
+disable this scrollbar).
 
 =cut
 
@@ -288,7 +335,8 @@ sub vscroll { 1 }
 
 =head2 hscroll
 
-True if there's a horizontal scrollbar.
+True if there's a horizontal scrollbar. There isn't one, this always
+returns false.
 
 =cut
 
@@ -300,17 +348,19 @@ Current row offset (vertical scroll position).
 
 =cut
 
-sub row_offset { shift->{row_offset} ||= 0 }
+sub row_offset { shift->{row_offset} //= 0 }
 
 =head2 visible_lines
 
-Returns the list of lines currently visible in the display.
+Returns the list of rows (as arrayrefs) currently visible in the display. Hidden
+rows are not included in this list.
 
 =cut
 
 sub visible_lines {
 	my $self = shift;
-	return @{$self->{data}}[$self->row_offset..$self->row_offset + $self->scroll_dimension];
+	# FIXME This could be more efficient
+	return +(grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), @{$self->{data}})[$self->row_offset..$self->row_offset + $self->scroll_dimension];
 }
 
 =head2 header_rect
@@ -322,7 +372,10 @@ Returns the L<Tickit::Rect> representing the header area.
 sub header_rect {
 	my $self = shift;
 	$self->{header_rect} ||= Tickit::Rect->new(
-		top => 0, lines => 1, left => 0, cols => $self->window->cols
+		top => 0,
+		lines => 1,
+		left => 0,
+		cols => $self->window->cols
 	);
 }
 
@@ -335,7 +388,10 @@ Returns the L<Tickit::Rect> representing the body area.
 sub body_rect {
 	my $self = shift;
 	$self->{body_rect} ||= Tickit::Rect->new(
-		top => 1, lines => $self->window->lines - 1, left => 0, cols => $self->window->cols - 1
+		top   => 1,
+		lines => $self->window->lines - 1,
+		left  => 0,
+		cols  => $self->window->cols - 1
 	);
 }
 
@@ -348,7 +404,10 @@ Returns the L<Tickit::Rect> representing the scroll bar.
 sub scrollbar_rect {
 	my $self = shift;
 	$self->{scrollbar_rect} ||= Tickit::Rect->new(
-		top => 1, lines => $self->window->lines - 1, left => $self->window->cols - 1, cols => 1,
+		top   => 1,
+		lines => $self->window->lines - 1,
+		left  => $self->window->cols - 1,
+		cols  => 1,
 	);
 }
 
@@ -386,7 +445,7 @@ sub render_to_rb {
 
 	$self->render_header($rb, $rect) if $rect->intersects($self->header_rect);
 	$self->render_body($rb, $rect) if $rect->intersects($self->body_rect);
-	$self->render_scrollbar($rb, $rect) if $rect->intersects($self->scrollbar_rect);
+	$self->render_scrollbar($rb, $rect) if $self->vscroll && $rect->intersects($self->scrollbar_rect);
 	my $highlight_pos = 1 + $self->highlight_visible_row;
 	$win->cursor_at($highlight_pos, 0);
 }
@@ -470,11 +529,11 @@ Render the scrollbar.
 sub render_scrollbar {
 	my ($self, $rb) = @_;
 	my $win = $self->window;
-	my $cols = $win->cols;
-	--$cols if $self->vscroll;
+	my $cols = $win->cols - 1;
 
 	my $h = $win->lines - 1;
 	if(my ($min, $max) = map 1 + $_, $self->scroll_rows) {
+	# warn "sb min: $min, max $max h $h\n";
 		# Scrollbar should be shown, since we don't have all rows visible on the screen at once
 		$rb->vline_at(1, $min - 1, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $min > 1;
 		$rb->vline_at($min, $max, $cols, LINE_DOUBLE, $self->get_style_pen('scroll'), CAP_BOTH);
@@ -764,7 +823,17 @@ Total number of rows.
 
 =cut
 
-sub row_count { scalar @{shift->{data}} }
+sub row_count {
+	my $self = shift;
+	scalar $self->visible_data
+}
+
+sub visible_data {
+	my $self = shift;
+	@{ $self->{visible_data} ||= [
+		grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), @{$self->{data}}
+	] }
+}
 
 =head2 sb_height
 
@@ -775,7 +844,9 @@ Current scrollbar height.
 sub sb_height {
 	my $self = shift;
 	my $ext = $self->scroll_dimension;
+	# die "negative ext: $ext" if $ext < 0;
 	my $max = $self->row_count - $ext;
+	# die "negative max: $max and ext=$ext" if $max < 0;
 	return 1 unless $max;
 	return floor(0.5 + ($ext * $ext / $max));
 }
@@ -869,9 +940,9 @@ sub key_activate {
 		my $idx = $self->highlight_row;
 		if($self->multi_select) {
 			my @selected = sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}};
+			unshift @selected, $idx;
 			$code->(
-				[ $idx, @selected ],
-				$self->{data}[$idx],
+				\@selected,
 				@{$self->{data}}[@selected]
 			);
 		} else {
@@ -895,6 +966,101 @@ sub key_select_toggle {
 	return $self unless $self->multi_select;
 	$self->{selected}{$self->highlight_row} = $self->{selected}{$self->highlight_row} ? 0 : 1;
 	$self
+}
+
+# NYI
+sub row_visibility_changed {
+	my $self = shift;
+	delete $self->{visible_data}
+}
+
+=head2 row_visibility
+
+Sets the visibility of the given row (by index).
+
+Example:
+
+ # Make row 5 hidden
+ $tbl->row_visibility(5, 0)
+ # Show row 0
+ $tbl->row_visibility(0, 1)
+
+=cut
+
+sub row_visibility {
+	my ($self, $idx, $visible) = @_;
+	my $row = $self->{data}[$idx];
+	my $prev = ref($row);
+	$prev = 'Tickit::Widget::Table::Paged::VisibleRow' if $prev eq 'ARRAY';
+	my $next = $visible
+	? 'Tickit::Widget::Table::Paged::VisibleRow'
+	: 'Tickit::Widget::Table::Paged::HiddenRow';
+	bless $row, $next;
+	$self->row_visibility_changed($idx) unless $self->{IS_FILTER} || ($prev eq $next);
+	$row
+}
+
+=head2 filter
+
+This will use the given coderef to set the visibility of each row in the table.
+The coderef will be called once for each row, and should return true for rows
+which should be visible, false for rows to be hidden.
+
+The coderef currently takes a single parameter: an arrayref representing the
+columns of the row to be processed.
+
+ # Hide all rows where the second column contains the text 'OK'
+ $tbl->filter(sub { shift->[1] ne 'OK' });
+
+Note that this does not affect row selection: if the multiselect flag is enabled,
+it is possible to filter out rows that are selected. This behaviour is by design
+(the idea was to allow union select via different filter criteria), call the
+L</unselect_hidden_rows> method after filtering if you want to avoid this.
+
+Also note that this is a one-shot operation. If you add or change data, you'll
+need to reapply the filter operation manually.
+
+=cut
+
+sub filter {
+	my ($self, $filter) = @_;
+	# Defer any updates until we've finished making changes
+	local $self->{IS_FILTER} = 1;
+	for my $idx (0..$#{$self->{data}}) {
+		my $row = $self->{data}[$idx];
+		$self->row_visibility($idx, $filter->($row));
+	}
+	delete $self->{visible_data};
+	$self->redraw;
+}
+
+sub apply_filters_to_row {
+	my ($self, $idx) = @_;
+}
+
+=head2 unselect_hidden_rows
+
+Helper method to mark any hidden rows as unselected.
+Call this after L</filter> if you want to avoid confusing
+users with invisible selected rows.
+
+=cut
+
+sub unselect_hidden_rows {
+	my $self = shift;
+	delete @{$self->{selected}}{
+		grep ref($self->{data}[$_])->isa('Tickit::Widget::Table::Paged::HiddenRow'), 0..$#{$self->{data}}
+	};
+	$self
+}
+
+{ # Class used for tagging rows as hidden
+	package 
+		Tickit::Widget::Table::Paged::HiddenRow;
+}
+{ # Class used for tagging rows as visible
+	package
+		Tickit::Widget::Table::Paged::VisibleRow;
 }
 
 1;
@@ -941,5 +1107,5 @@ Tom Molesworth <cpan@entitymodel.com>
 
 =head1 LICENSE
 
-Copyright Tom Molesworth 2012-2013. Licensed under the same terms as Perl itself.
+Copyright Tom Molesworth 2012-2014. Licensed under the same terms as Perl itself.
 
