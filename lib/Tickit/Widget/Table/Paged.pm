@@ -34,13 +34,22 @@ Tickit::Widget::Table::Paged - table widget with support for scrolling/paging
 B<WARNING>: This is a preview release. API is subject to change in future,
 please get in contact if you're using this, or wait for version 1.000.
 
-This widget provides a scrollable table implementation.
-
 =begin HTML
 
 <p><img src="http://tickit.perlsite.co.uk/cpan-screenshot/tickit-widget-table-paged1.gif" alt="Paged table widget in action" width="430" height="306"></p>
 
 =end HTML
+
+This widget provides a scrollable table implementation for use on larger data
+sets. Rather than populating the table with values, you provide an adapter
+which implements the C<count> and C<get> methods, and the table widget will
+query the adapter for the current "page" of values.
+
+This abstraction should allow access to larger datasets than would fit in
+available memory, such as a database table or procedurally-generated data.
+
+See L<Tickit::Widget::Table::Paged::Adapter::Array> for a simple implementation
+using a Perl arrayref.
 
 =cut
 
@@ -49,6 +58,9 @@ use Tickit::Utils qw(distribute substrwidth align textwidth);
 use Tickit::Style;
 use Scalar::Util qw(looks_like_number);
 use POSIX qw(floor);
+
+use Tickit::Widget::Table::Adapter;
+use Tickit::Widget::Table::Adapter::Array;
 
 use constant CLEAR_BEFORE_RENDER => 0;
 use constant KEYPRESSES_FROM_STYLE => 1;
@@ -73,7 +85,9 @@ BEGIN {
 		scroll_fg            => 'white',
 		scroll_bg            => 'black',
 #		scroll_line_style    => 'block';
-#
+# Technically we should ignore any keyboard input if we don't have focus,
+# but other widgets don't currently do this and things seem to work without
+# it anyway.
 #	style_definition ':focus' =>
 		'<Up>'               => 'previous_row',
 		'<Down>'             => 'next_row',
@@ -87,7 +101,9 @@ BEGIN {
 		'<Enter>'            => 'activate';
 }
 
-# Allow more descriptive terms for column alignment
+# Allow more descriptive terms for column alignment - these
+# map to the values allowed by the Tickit::Utils::align series
+# of functions.
 my %ALIGNMENT_TYPE = (
 	left   => 0,
 	right  => 1,
@@ -104,20 +120,50 @@ my %ALIGNMENT_TYPE = (
 
 Instantiate. Will attempt to take focus.
 
+Takes the following named parameters:
+
+=over 4
+
+=item * on_activate - coderef to call when the user hits the Enter key,
+will be passed the highlighted row or selection when in C<multi_select> mode,
+see L</on_activate> for more details.
+
+=item * multi_select - when set, the widget will allow selection of multiple
+rows (typically by pressing Space to toggle a given row)
+
+=item * adapter - a L<Tickit::Widget::Table::Adapter> instance
+
+=back
+
+Returns a new instance.
+
 =cut
 
 sub new {
 	my $class = shift;
 	my %args = @_;
-	my $on_activate = delete $args{on_activate};
-	my $multi_select = delete $args{multi_select};
+	my %attr;
+	$attr{$_} = delete $args{$_} for qw(
+		on_activate
+		multi_select
+		adapter
+	);
 	my $self = $class->SUPER::new(@_);
 	$self->{columns} = [];
 	$self->{highlight_row} = 0;
-	$self->on_activate($on_activate) if $on_activate;
-	$self->multi_select($multi_select);
+	$self->on_activate($attr{on_activate}) if $attr{on_activate};
+	$self->multi_select($attr{multi_select} || 0);
+	$attr{adapter} ||= Tickit::Widget::Table::Adapter::Array->new;
+	$self->adapter($attr{adapter});
 	$self->take_focus;
 	$self
+}
+
+sub adapter {
+	my $self = shift;
+	return $self->{adapter} unless @_;
+	$self->{adapter} = shift;
+	return $self;
 }
 
 =head1 METHODS - Table content
@@ -133,7 +179,7 @@ necessary redrawing or resizing logic if you choose to do so.
 =cut
 
 sub data {
-	shift->{data}
+	shift->adapter
 }
 
 =head2 clear
@@ -144,7 +190,7 @@ Clear all data in the table.
 
 sub clear {
 	my $self = shift;
-	$self->{data} = [];
+	$self->adapter->clear;
 	$self->{highlight_row} = 0;
 	$self->redraw;
 	$self
@@ -161,7 +207,7 @@ Returns $self.
 
 sub add_row {
 	my $self = shift;
-	push @{$self->{data}}, [ @_ ];
+	$self->adapter->append(@_);
 	$self
 }
 
@@ -181,8 +227,7 @@ Returns $self.
 
 sub update_row {
 	my ($self, $idx, @cols) = @_;
-	die "row out of bounds" unless $self->{data}[$idx];
-	$self->{data}[$idx][$_] = $cols[$_] for 0..$#cols;
+	$self->adapter->modify($idx, @cols);
 	$self->apply_filters_to_row($idx);
 	$self->expose_row($idx);
 	$self
@@ -191,7 +236,7 @@ sub update_row {
 sub delete_row {
 	my ($self, $idx) = @_;
 	my $visible = $self->is_row_visible($idx);
-	splice $self->{data}, $idx, 1;
+	$self->adapter->delete($idx);
 	$self->redraw if $visible;
 	$self;
 }
@@ -360,7 +405,8 @@ rows are not included in this list.
 sub visible_lines {
 	my $self = shift;
 	# FIXME This could be more efficient
-	return +(grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), @{$self->{data}})[$self->row_offset..$self->row_offset + $self->scroll_dimension];
+	#warn "slice: $_\n", for $self->adapter->slice($self->row_offset, $self->scroll_dimension);
+	return +(grep !(ref($_) // 'main')->isa('Tickit::Widget::Table::Paged::HiddenRow'), $self->adapter->slice($self->row_offset, $self->scroll_dimension));
 }
 
 =head2 header_rect
@@ -845,7 +891,7 @@ sub row_count {
 sub visible_data {
 	my $self = shift;
 	@{ $self->{visible_data} ||= [
-		grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), @{$self->{data}}
+		grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), $self->adapter->slice(0, $self->adapter->count)
 	] }
 }
 
@@ -957,12 +1003,12 @@ sub key_activate {
 			unshift @selected, $idx;
 			$code->(
 				\@selected,
-				@{$self->{data}}[@selected]
+				map $self->adapter->get($_), @selected
 			);
 		} else {
 			$code->(
 				$idx,
-				$self->{data}[$idx],
+				$self->adapter->get($idx)
 			);
 		}
 	}
@@ -1003,7 +1049,7 @@ Example:
 
 sub row_visibility {
 	my ($self, $idx, $visible) = @_;
-	my $row = $self->{data}[$idx];
+	my $row = $self->adapter->get($idx);
 	my $prev = ref($row);
 	$prev = 'Tickit::Widget::Table::Paged::VisibleRow' if $prev eq 'ARRAY';
 	my $next = $visible
@@ -1040,8 +1086,8 @@ sub filter {
 	my ($self, $filter) = @_;
 	# Defer any updates until we've finished making changes
 	local $self->{IS_FILTER} = 1;
-	for my $idx (0..$#{$self->{data}}) {
-		my $row = $self->{data}[$idx];
+	for my $idx (0..$self->adapter->count - 1) {
+		my $row = $self->adapter->get($idx);
 		$self->row_visibility($idx, $filter->($row));
 	}
 	delete $self->{visible_data};
@@ -1063,7 +1109,7 @@ users with invisible selected rows.
 sub unselect_hidden_rows {
 	my $self = shift;
 	delete @{$self->{selected}}{
-		grep ref($self->{data}[$_])->isa('Tickit::Widget::Table::Paged::HiddenRow'), 0..$#{$self->{data}}
+		grep ref($self->adapter->get($_))->isa('Tickit::Widget::Table::Paged::HiddenRow'), 0..$self->adapter->count-1
 	};
 	$self
 }
@@ -1093,12 +1139,12 @@ abstraction. The current abstraction implementation needs more work before
 it's reliable enough for release, so this version only has basic arrayref
 support.
 
+=item * Formatters for converting raw cell data into printable format
+(without having to go through a separate widget)
+
 =item * Column and cell highlighting modes
 
 =item * Proper widget-in-cell support
-
-=item * Formatters for converting raw cell data into printable format
-(without having to go through a separate widget)
 
 =item * Better header support (more than one row, embedded widgets)
 
