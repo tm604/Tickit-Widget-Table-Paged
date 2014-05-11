@@ -17,13 +17,12 @@ vbox {
 	$tbl = customwidget {
 		my $w = Tickit::Widget::Table::Paged->new(
 			multi_select => 1,
-			adapter => 'array',
 		);
 		$w->add_column(
 			label => 'Item',
 		);
 		my $adapter = $w->adapter;
-		$adapter->add_row($_) for qw(One Two Three Four Five Six Seven Eight Nine Ten);
+		$adapter->append($_) for qw(One Two Three Four Five Six Seven Eight Nine Ten);
 		$w
 	} expand => 1;
 };
