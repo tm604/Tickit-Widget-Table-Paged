@@ -489,9 +489,7 @@ sub render_body {
 	for my $line ($rect->linerange) {
 		my $idx = $self->idx_from_row($line);
 		my $f = $self->row_cache($idx);
-		warn "had $f for $idx\n";
 		if($f->is_done) {
-			warn "have line $line for $idx\n";
 			$self->render_row($rb, $rect, $idx, $f->get);
 		} elsif($f->is_ready) {
 			next unless defined $self->{item_count};
@@ -503,7 +501,6 @@ sub render_body {
 				$self->{item_count} = shift
 			});
 		} else {
-			warn "row $line not yet ready for $idx\n";
 			$f->on_done($self->curry::expose_row($idx));
 		}
 	}
@@ -551,7 +548,6 @@ sub on_scroll {
 sub row_cache {
 	my ($self, $row) = @_;
 	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
-		warn "Read from adapter\n";
 		$self->adapter->get(
 			items => [$row],
 		)->then(sub {
@@ -561,7 +557,6 @@ sub row_cache {
 			my ($item) = @{ $_[0] };
 			return Future->fail('no such element') unless $item;
 
-			warn "Had $item from adapter as " . join(',', @$item) . "\n";
 			# Somewhat tedious way to reduce() a Future chain
 			(fmap_void {
 				shift->($row, $item)->on_done(sub {
@@ -573,11 +568,9 @@ sub row_cache {
 		})->then(sub {
 			# Our item is now accessible as an arrayref, start working on the columns
 			my $item = shift;
-			warn "Had $item after tx\n";
 			my @pending;
 			for my $col (0..$#{$self->{columns}}) {
 				my $cell = $item->[$col];
-				warn "cell starts as $cell for $col\n";
 				push @pending, (
 					fmap_void {
 						shift->($row, $col, $cell)->on_done(sub {
@@ -599,7 +592,7 @@ sub row_cache {
 			# end up with a helpful list of cells for this item. One last thing to
 			# do: bundle that back into an arrayref, because Reasons.
 			Future->needs_all(@pending)->transform(
-				done => sub { warn "final: @_\n"; [ @_ ] }
+				done => sub { [ @_ ] }
 			)
 		})
 	};
@@ -614,7 +607,6 @@ sub apply_view_transformations {
 sub render_row {
 	my ($self, $rb, $rect, $row, $data) = @_;
 
-warn "rendering row $row with $data\n";
 	my $line = $self->row_from_idx($row);
 	my $base_pen = $self->get_style_pen(
 		($row == $self->highlight_row)
