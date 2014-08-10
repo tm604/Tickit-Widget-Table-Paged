@@ -153,7 +153,7 @@ sub new {
 		adapter
 	);
 	my $self = $class->SUPER::new(@_);
-	$self->{visible_map} = [ ];
+	$self->{row_cache} = [ ];
 	$self->{item_transformations} = [ ];
 	$self->{col_transformations} = [ ];
 	$self->{cell_transformations} = { };
@@ -468,7 +468,7 @@ sub render_body {
 
 	for my $line ($rect->linerange) {
 		my $idx = $self->idx_from_row($line);
-		my $f = $self->visible_map($idx);
+		my $f = $self->row_cache($idx);
 		warn "had $f for $idx\n";
 		if($f->is_done) {
 			warn "have line $line for $idx\n";
@@ -501,10 +501,14 @@ sub row_from_idx {
 	return $self->header_lines + $idx - $self->row_offset;
 }
 
-# XXX Terrible name. Change this.
-sub visible_map {
+sub row_cache_idx {
+	my ($self, $idx) = @_;
+	return $self->body_lines + $idx - $self->row_offset;
+}
+
+sub row_cache {
 	my ($self, $row) = @_;
-	$self->{visible_map}[$self->row_from_idx($row)] ||= do {
+	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
 		warn "Read from adapter\n";
 		$self->adapter->get(
 			items => [$row],
