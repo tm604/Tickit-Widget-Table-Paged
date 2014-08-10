@@ -662,79 +662,6 @@ sub render_row {
 	}
 }
 
-=head2 render_body
-
-Render the body area.
-
-=cut
-
-sub render_body_old {
-	my ($self, $rb, $rect) = @_;
-	return $self unless my $win = $self->window;
-
-	# Need a mapping from actual rows to visible content
-
-	my $highlight_pos = 1 + $self->highlight_visible_row;
-	my @visible = (undef, $self->visible_lines);
-	LINE:
-	for my $y ($rect->linerange) {
-		next LINE unless $y;
-		next LINE if $y >= @visible;
-		unless($visible[$y]) {
-			$rb->goto($y, $rect->left);
-			$rb->text(' ' x $rect->cols, $self->get_style_pen('padding'));
-			next LINE;
-		}
-		$rb->goto($y, 0);
-		my @col_text = @{$visible[$y]};
-		CELL:
-		for (@{$self->{columns}}) {
-			if($_->{type} eq 'widget') {
-				$rb->skip($_->{value});
-				my $w = $_->{attached_widget}[$y];
-				$w->set_style_tag('highlight' => ($y == $highlight_pos) ? 1 : 0);
-				(shift @col_text)->($w);
-				next CELL;
-			}
-
-			if($_->{type} eq 'padding') {
-				$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
-			} else {
-				$_->{style} = $self->get_style_pen(
-					($y == $highlight_pos)
-					? 'highlight'
-					: ($self->multi_select && $self->{selected}{$y + $self->row_offset - 1})
-					? 'selected'
-					: undef
-				);
-				local $_->{text} = shift @col_text;
-				$self->render_cell($rb, $_);
-			}
-		}
-	}
-}
-
-=head2 apply_column_widget
-
-Add widgets for the column.
-
-=cut
-
-sub apply_column_widget {
-	my $self = shift;
-	return $self unless my $win = $self->window;
-	for my $y (1..$win->lines-1) {
-		CELL:
-		for (@{$self->{columns}}) {
-			next CELL unless $_->{type} eq 'widget';
-
-			my $sub = $win->make_sub($y, $_->{start}, 1, $_->{value});
-			$_->{attached_widget}[$y] = $_->{factory}->($sub);
-		}
-	}
-	$self;
-}
-
 =head2 render_scrollbar
 
 Render the scrollbar.
@@ -804,7 +731,6 @@ sub reshape {
 	delete @{$self}{qw(body_rect header_rect scrollbar_rect)};
 	$self->SUPER::reshape(@_);
 	$self->distribute_columns;
-	$self->apply_column_widget;
 }
 
 =head2 distribute_columns
@@ -829,13 +755,6 @@ sub distribute_columns {
 	--$cols if $self->vscroll;
 	distribute $cols, @spacing;
 	@{$self->{columns}[$_]}{qw(start value)} = @{$spacing[$_]}{qw(start value)};
-#	if($self->{column_layout}) {
-#		CELL:
-#		for my $cell (@{$self->{column_layout}}) {
-#			next CELL unless $cell->{type} eq 'widget';
-#			$_->set_window(undef) for grep defined, @{$cell->{attached_widget}};
-#		}
-#	}
 	$self
 }
 
@@ -1022,11 +941,6 @@ Go up a page.
 sub key_previous_page {
 	my $self = shift;
 	$self->scroll_highlight(-$self->scroll_dimension);
-#	$self->{highlight_row} -= $self->scroll_dimension;
-#	$self->{row_offset} -= $self->scroll_dimension;
-#	$self->{highlight_row} = 0 if $self->{highlight_row} < 0;
-#	$self->{row_offset} = 0 if $self->{row_offset} < 0;
-#	$self->redraw;
 }
 
 =head2 key_next_page
@@ -1039,13 +953,6 @@ sub key_next_page {
 	my $self = shift;
 	$self->scroll_highlight($self->scroll_dimension);
 }
-#	$self->{highlight_row} += $self->scroll_dimension;
-#	$self->{row_offset} += $self->scroll_dimension;
-#	$self->{highlight_row} = $self->row_count - 1 if $self->{highlight_row} > $self->row_count - 1;
-#	my $max = $self->row_count > $self->scroll_dimension ? -1 + $self->row_count - $self->scroll_dimension : 0;
-#	$self->{row_offset} = $max if $self->{row_offset} > $max;
-#	$self->redraw;
-#}
 
 =head2 scroll_position
 
