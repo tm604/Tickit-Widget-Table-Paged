@@ -394,10 +394,10 @@ Returns the L<Tickit::Rect> representing the header area.
 sub header_rect {
 	my $self = shift;
 	$self->{header_rect} ||= Tickit::Rect->new(
-		top => 0,
-		lines => 1,
-		left => 0,
-		cols => $self->window->cols
+		top   => 0,
+		lines => $self->header_lines,
+		left  => 0,
+		cols  => $self->window->cols
 	);
 }
 
