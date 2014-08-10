@@ -507,6 +507,27 @@ sub row_cache_idx {
 	return $self->body_lines + $idx - $self->row_offset;
 }
 
+=head2 on_scroll
+
+When scrolling, ensure our row cache
+
+=cut
+
+sub on_scroll {
+	my ($self, $offset) = @_;
+	my @removed = splice
+		@{$self->{row_cache}},
+		($offset > 0) ?
+		  # Scrolling down means we throw away the first N rows
+		  (0, $offset)
+		  # and in the other direction, last N rows
+		: (@{$self->{row_cache}} + $offset);
+	# Any items that were still in progress are no longer required, make
+	# sure we cancel them to avoid unnecessary work.
+	$_->cancel for grep defined($_) && !$_->is_ready, @removed;
+	$self
+}
+
 sub row_cache {
 	my ($self, $row) = @_;
 	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
