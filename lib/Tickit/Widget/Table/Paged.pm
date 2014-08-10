@@ -1260,6 +1260,13 @@ sub on_adapter_change {
 
 	$self->bus->subscribe_to_event(@{
 		$self->{adapter_subscriptions} = [
+			splice => sub {
+				my ($ev, $idx, $len, $data) = @_;
+				$self->adapter->count->on_done(sub {
+					$self->{item_count} = shift
+				});
+				$self->redraw;
+			}
 		]
 	});
 	$self->adapter->count->on_done(sub {
