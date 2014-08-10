@@ -13,6 +13,10 @@ Revision history for {{$dist->name}}
 	* Scrollbar rendering - sometimes this extended into header due
 	to incorrect ratio calculation
 
+	Bugs introduced:
+	* Filtering does not yet work reliably. It might not work at all.
+	You should probably wait for the next version.
+
 0.004     2014-04-22 02:33:42+01:00 Europe/London
 	New features:
 	* ->data method returns the arrayref holding table data
