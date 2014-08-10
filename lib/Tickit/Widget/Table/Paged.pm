@@ -524,6 +524,11 @@ sub row_cache_idx {
 	return $self->body_lines + $idx - $self->row_offset;
 }
 
+sub idx_from_row_cache {
+	my ($self, $row) = @_;
+	return $row + $self->row_offset - $self->body_lines;
+}
+
 =head2 on_scroll
 
 When scrolling, ensure our row cache
