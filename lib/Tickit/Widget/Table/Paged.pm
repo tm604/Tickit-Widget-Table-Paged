@@ -1380,12 +1380,24 @@ Current list of pending features:
 
 =head1 SEE ALSO
 
+Other tables and table-like things:
+
 =over 4
 
 =item * L<Tickit::Widget::Table> - older table implementation based on L<Tickit::Widget::HBox> and L<Tickit::Widget::VBox>
 widgets. Does not support scrolling and performance isn't as good, so it will eventually be merged with this one.
 
 =item * L<Text::ANSITable> - not part of L<Tickit> but has some impressive styling capabilities.
+
+=back
+
+And these are probably important background reading for formatting and data source support:
+
+=over 4
+
+=item * L<String::Tagged> - supported for applying custom formatting (specifically, pen attributes)
+
+=item * L<Adapter::Async> - API for dealing with abstract data sources
 
 =back
 
