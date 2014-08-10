@@ -520,6 +520,7 @@ sub row_from_idx {
 
 sub row_cache_idx {
 	my ($self, $idx) = @_;
+	die "no window yet" unless $self->window;
 	return $self->body_lines + $idx - $self->row_offset;
 }
 
