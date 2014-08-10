@@ -490,6 +490,7 @@ sub render_body {
 }
 
 sub header_lines { 1 }
+sub body_lines { $_[0]->window->lines - $_[0]->header_lines }
 
 sub idx_from_row {
 	my ($self, $row) = @_;
