@@ -152,7 +152,6 @@ sub new {
 		multi_select
 		adapter
 		item_transformations
-		col_transformations
 		cell_transformations
 		columns
 		highlight_row
@@ -171,7 +170,6 @@ sub new {
 
 	# Some defaults
 	$attr{item_transformations} ||= [ ];
-	$attr{col_transformations} ||= [ ];
 	$attr{cell_transformations} ||= { };
 	$attr{columns} ||= [];
 	$attr{highlight_row} //= 0;
@@ -600,7 +598,7 @@ sub row_cache {
 						shift->($row, $col, $cell)->on_done(sub {
 							$cell = shift
 						})
-					} foreach => [ @{$self->{col_transformations}[$col] || [] } ]
+					} foreach => [ @{$self->{columns}[$col]{transform} || [] } ]
 				)->then(sub {
 					# hey look at all these optimisations we're not doing
 					fmap_void {
