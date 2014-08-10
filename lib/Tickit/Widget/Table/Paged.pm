@@ -1316,19 +1316,39 @@ sub on_adapter_change {
 
 	$self->bus->subscribe_to_event(@{
 		$self->{adapter_subscriptions} = [
-			splice => sub {
-				my ($ev, $idx, $len, $data) = @_;
-				$self->adapter->count->on_done(sub {
-					$self->{item_count} = shift
-				});
-				$self->redraw;
-			}
+			splice => $self->curry::weak::on_splice_event,
 		]
 	});
 	$self->adapter->count->on_done(sub {
 		$self->{item_count} = shift
 	});
 	$self
+}
+
+sub on_splice_event {
+	my ($self, $ev, $idx, $len, $data) = @_;
+
+	my $delta = @$data - $len;
+
+	if(my $win = $self->window) {
+		# Row cache update
+		my $rc_start = $self->idx_from_row_cache(0);
+		my $rc_end = $self->idx_from_row_cache(3 * $self->body_lines - 1);
+
+		$self->scroll_highlight($delta) if $delta;
+		$win->expose;
+	}
+
+	# Either update our cached count based on
+	# the change, or request a new count if we have
+	# none yet
+	if(defined $self->{item_count}) {
+		$self->{item_count} += $delta;
+	} else {
+		$self->adapter->count->on_done(sub {
+			$self->{item_count} = shift
+		});
+	}
 }
 
 { # Class used for tagging rows as hidden
