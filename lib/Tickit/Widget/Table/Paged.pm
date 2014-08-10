@@ -441,7 +441,7 @@ Render the header area.
 sub render_header {
 	my ($self, $rb) = @_;
 	$rb->goto(0, 0);
-	for (@{$self->{column_layout}}) {
+	for (@{$self->{columns}}) {
 		if(($_->{type} // '') eq 'padding') {
 			$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
 		} else {
@@ -690,7 +690,7 @@ sub render_body_old {
 		$rb->goto($y, 0);
 		my @col_text = @{$visible[$y]};
 		CELL:
-		for (@{$self->{column_layout}}) {
+		for (@{$self->{columns}}) {
 			if($_->{type} eq 'widget') {
 				$rb->skip($_->{value});
 				my $w = $_->{attached_widget}[$y];
@@ -727,7 +727,7 @@ sub apply_column_widget {
 	return $self unless my $win = $self->window;
 	for my $y (1..$win->lines-1) {
 		CELL:
-		for (@{$self->{column_layout}}) {
+		for (@{$self->{columns}}) {
 			next CELL unless $_->{type} eq 'widget';
 
 			my $sub = $win->make_sub($y, $_->{start}, 1, $_->{value});
@@ -830,14 +830,14 @@ sub distribute_columns {
 	my $cols = $self->window->cols;
 	--$cols if $self->vscroll;
 	distribute $cols, @spacing;
-	if($self->{column_layout}) {
-		CELL:
-		for my $cell (@{$self->{column_layout}}) {
-			next CELL unless $cell->{type} eq 'widget';
-			$_->set_window(undef) for grep defined, @{$cell->{attached_widget}};
-		}
-	}
-	$self->{column_layout} = \@spacing;
+	@{$self->{columns}[$_]}{qw(start value)} = @{$spacing[$_]}{qw(start value)};
+#	if($self->{column_layout}) {
+#		CELL:
+#		for my $cell (@{$self->{column_layout}}) {
+#			next CELL unless $cell->{type} eq 'widget';
+#			$_->set_window(undef) for grep defined, @{$cell->{attached_widget}};
+#		}
+#	}
 	$self
 }
 
