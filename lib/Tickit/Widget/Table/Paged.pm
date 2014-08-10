@@ -1311,6 +1311,8 @@ sub on_adapter_change {
 
 	delete $self->{bus};
 	$self->{adapter} = $adapter;
+	undef $self->{item_count};
+	return $self unless $adapter;
 
 	$self->bus->subscribe_to_event(@{
 		$self->{adapter_subscriptions} = [
