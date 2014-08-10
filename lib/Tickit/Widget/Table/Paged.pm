@@ -16,7 +16,6 @@ Tickit::Widget::Table::Paged - table widget with support for scrolling/paging
  use Tickit::Widget::Table::Paged;
 
  my $tbl = Tickit::Widget::Table::Paged->new;
- $tbl->{row_offset} = 0;
  $tbl->add_column(
  	label => 'Left',
  	align => 'left',
