@@ -22,7 +22,7 @@ vbox {
 			label => 'Item',
 		);
 		my $adapter = $w->adapter;
-		$adapter->append($_) for qw(One Two Three Four Five Six Seven Eight Nine Ten);
+		$adapter->append(0, [map [$_], qw(One Two Three Four Five Six Seven Eight Nine Ten)]);
 		$w
 	} expand => 1;
 };
