@@ -197,51 +197,6 @@ sub clear {
 	$self
 }
 
-=head2 add_row
-
-Add a row to the table. Data should be provided as a list with one item per
-column.
-
-Returns $self.
-
-=cut
-
-sub add_row {
-	my $self = shift;
-	$self->adapter->append(@_);
-	$self
-}
-
-=head2 update_row
-
-Replaces the values in a row with the given list.
-
-Takes the row index (from 0) as the first parameter, with the
-remaining parameters being the new cell values for this row.
-
-Will throw an exception if the row is not already present in
-the table.
-
-Returns $self.
-
-=cut
-
-sub update_row {
-	my ($self, $idx, @cols) = @_;
-	$self->adapter->modify($idx, @cols);
-	$self->apply_filters_to_row($idx);
-	$self->expose_row($idx);
-	$self
-}
-
-sub delete_row {
-	my ($self, $idx) = @_;
-	my $visible = $self->is_row_visible($idx);
-	$self->adapter->delete($idx);
-	$self->redraw if $visible;
-	$self;
-}
-
 sub is_row_visible {
 	my $self = shift;
 	1
@@ -249,7 +204,7 @@ sub is_row_visible {
 
 sub expose_row {
 	my $self = shift;
-	$self->redraw if $self->is_row_visible;
+	$self->redraw; # if $self->is_row_visible;
 	return $self;
 }
 
@@ -491,10 +446,161 @@ sub render_to_rb {
 	$self->{highlight_row} ||= 0;
 
 	$self->render_header($rb, $rect) if $rect->intersects($self->header_rect);
-	$self->render_body($rb, $rect) if $rect->intersects($self->body_rect);
+	$self->render_body($rb, $rect);
 	$self->render_scrollbar($rb, $rect) if $self->vscroll && $rect->intersects($self->scrollbar_rect);
 	my $highlight_pos = 1 + $self->highlight_visible_row;
 	$win->cursor_at($highlight_pos, 0);
+}
+
+sub row_exposed {
+	my ($self, $rb, $rect, $row) = @_;
+}
+
+sub render_body {
+	my ($self, $rb, $rect) = @_;
+	return $self unless my $win = $self->window;
+
+	# Make sure we only step through the parts of
+	# the expose event that relate to the body
+	# area
+	$rect = $rect->intersect($self->body_rect)
+		or return $self;
+
+	for my $line ($rect->linerange) {
+		my $idx = $self->idx_from_row($line);
+		my $f = $self->visible_map($idx);
+		warn "had $f for $idx\n";
+		if($f->is_done) {
+			warn "have line $line for $idx\n";
+			$self->render_row($rb, $rect, $idx, $f->get);
+		} elsif($f->is_ready) {
+			next unless defined $self->{item_count};
+
+			# Use this as our count if we don't have one
+			# yet, since it might be a reasonable estimate
+			$self->{item_count} = $idx - 1;
+			$self->adapter->count->on_done(sub {
+				$self->{item_count} = shift
+			});
+		} else {
+			warn "row $line not yet ready for $idx\n";
+			$f->on_done($self->curry::expose_row($idx));
+		}
+	}
+}
+
+sub header_lines { 1 }
+
+sub idx_from_row {
+	my ($self, $row) = @_;
+	return $self->row_offset + $row - $self->header_lines;
+}
+
+sub row_from_idx {
+	my ($self, $idx) = @_;
+	return $self->header_lines + $idx - $self->row_offset;
+}
+
+# XXX Terrible name. Change this.
+sub visible_map {
+	my ($self, $row) = @_;
+	$self->{visible_map}[$self->row_from_idx($row)] ||= do {
+		warn "Read from adapter\n";
+		$self->adapter->get(
+			items => [$row],
+		)->then(sub {
+			# We have an item from storage. No idea what it is, could be an
+			# object, hashref, arrayref... the item transformations will
+			# convert it into something usable
+			my ($item) = @{ $_[0] };
+			return Future->fail('no such element') unless $item;
+
+			warn "Had $item from adapter as " . join(',', @$item) . "\n";
+			# Somewhat tedious way to reduce() a Future chain
+			(fmap_void {
+				shift->($row, $item)->on_done(sub {
+					$item = shift
+				})
+			} foreach => [ @{$self->{item_transformations}} ])->transform(
+				done => sub { $item }
+			);
+		})->then(sub {
+			# Our item is now accessible as an arrayref, start working on the columns
+			my $item = shift;
+			warn "Had $item after tx\n";
+			my @pending;
+			for my $col (0..$#{$self->{columns}}) {
+				my $cell = $item->[$col];
+				warn "cell starts as $cell for $col\n";
+				push @pending, (
+					fmap_void {
+						shift->($row, $col, $cell)->on_done(sub {
+							$cell = shift
+						})
+					} foreach => [ @{$self->{col_transformations}[$col] || [] } ]
+				)->then(sub {
+					# hey look at all these optimisations we're not doing
+					fmap_void {
+						shift->($row, $col, $cell)->on_done(sub {
+							$cell = shift
+						})
+					} foreach => [ @{$self->{cell_transformations}{"$row,$col"} || []} ]
+				})->transform(
+					done => sub { $cell }
+				);
+			}
+			# our transform at the tail of each Future chain should ensure that we
+			# end up with a helpful list of cells for this item. One last thing to
+			# do: bundle that back into an arrayref, because Reasons.
+			Future->needs_all(@pending)->transform(
+				done => sub { warn "final: @_\n"; [ @_ ] }
+			)
+		})
+	};
+}
+
+sub apply_view_transformations {
+	my ($self, $line, $col, $v) = @_;
+	$v = $_->($line, $col, $v) for @{$self->{view_transformations}};
+	$v
+}
+
+sub render_row {
+	my ($self, $rb, $rect, $row, $data) = @_;
+
+warn "rendering row $row with $data\n";
+	my $line = $self->row_from_idx($row);
+	my $base_pen = $self->get_style_pen(
+		($row == $self->highlight_row)
+		? 'highlight'
+		: ($self->multi_select && $self->{selected}{$line + $self->row_offset - 1})
+		? 'selected'
+		: undef
+	);
+	for my $col (0..$#$data) {
+		my $v = $self->apply_view_transformations($row, $col, $data->[$col]);
+		if(blessed($v) && $v->isa('String::Tagged')) {
+			# Copy before modifying, might be overkill?
+			my $st = String::Tagged->new($v);
+			$st->merge_tags(sub {
+				my ($k, $left, $right) = @_;
+				return $left eq $right;
+			});
+			$rb->goto($line, $col * 20);
+			$st->iter_substr_nooverlap(sub {
+				my ($substr, %tags) = @_;
+				my $pen = Tickit::Pen::Immutable->new(
+					$base_pen->getattrs,
+					%tags
+				);
+				$rb->text($substr, $pen);
+			});
+			$rb->erase_to($col + 20, $base_pen);
+		} else {
+			$rb->text_at($line, $col, $v, $base_pen);
+			$rb->erase_at($line, $col + textwidth($v), 20 - textwidth($v), $base_pen);
+		}
+	}
 }
 
 =head2 render_body
@@ -503,7 +609,7 @@ Render the body area.
 
 =cut
 
-sub render_body {
+sub render_body_old {
 	my ($self, $rb, $rect) = @_;
 	return $self unless my $win = $self->window;
 
@@ -747,19 +853,18 @@ sub scroll_highlight {
 	$redraw_rect->add($scrollbar_rect);
 	if($up) {
 		--$self->{highlight_row};
-		--$self->{row_offset};
+		#--$self->{row_offset};
 	} else {
 		++$self->{highlight_row};
-		++$self->{row_offset};
+		#++$self->{row_offset};
 	}
 
 	my $direction = $up ? -1 : 1;
 	$redraw_rect->add($scrollbar_rect->translate($direction, 0));
 	$redraw_rect->add($_) for $self->expose_rows($old, $self->highlight_visible_row);
 
-	# FIXME We're assuming the header is 1 row in height here (and elsewhere),
-	# this seems like an arbitrary restriction.
-	$win->scrollrect(1, 0, $win->lines - 1, $win->cols, $direction, 0);
+	my $hdr = $self->header_lines;
+	$win->scrollrect($hdr, 0, $win->lines - $hdr, $win->cols, $direction, 0);
 	$win->expose($_) for map $_->translate(-$direction, 0), $redraw_rect->rects;
 }
 
@@ -886,7 +991,7 @@ Total number of rows.
 
 sub row_count {
 	my $self = shift;
-	scalar $self->visible_data
+	$self->{item_count};
 }
 
 sub visible_data {
@@ -905,9 +1010,7 @@ Current scrollbar height.
 sub sb_height {
 	my $self = shift;
 	my $ext = $self->scroll_dimension;
-	# die "negative ext: $ext" if $ext < 0;
 	my $max = $self->row_count - $ext;
-	# die "negative max: $max and ext=$ext" if $max < 0;
 	return 1 unless $max;
 	return floor(0.5 + ($ext * $ext / $max));
 }
@@ -1001,16 +1104,19 @@ sub key_activate {
 		my $idx = $self->highlight_row;
 		if($self->multi_select) {
 			my @selected = sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}};
-			unshift @selected, $idx;
-			$code->(
-				\@selected,
-				map $self->adapter->get($_), @selected
-			);
+			# unshift @selected, $idx;
+			my $f; $f = $self->adapter->get(
+				items => \@selected,
+			)->then(sub {
+				$code->(\@selected, shift)
+			})->on_ready(sub { undef $f });
 		} else {
-			$code->(
-				$idx,
-				$self->adapter->get($idx)
-			);
+			my $f; $f = $self->adapter->get(
+				items => [ $idx ],
+			)->then(sub {
+				my $items = shift;
+				$code->($idx, @$items)
+			})->on_ready(sub { undef $f });
 		}
 	}
 	$self
@@ -1115,6 +1221,27 @@ sub unselect_hidden_rows {
 	$self
 }
 
+sub on_adapter_change {
+	my ($self, $adapter) = @_;
+	if(my $old = $self->{adapter}) {
+		$old->bus->unsubscribe_from_event(
+			@{$self->{adapter_subscriptions}}
+		);
+	}
+
+	delete $self->{bus};
+	$self->{adapter} = $adapter;
+
+	$self->bus->subscribe_to_event(@{
+		$self->{adapter_subscriptions} = [
+		]
+	});
+	$self->adapter->count->on_done(sub {
+		$self->{item_count} = shift
+	});
+	$self
+}
+
 { # Class used for tagging rows as hidden
 	package 
 		Tickit::Widget::Table::Paged::HiddenRow;
@@ -1133,15 +1260,6 @@ __END__
 Current list of pending features:
 
 =over 4
-
-=item * Storage abstraction - the main difference between this widget and
-L<Tickit::Widget::Table> is that this is designed to work with a storage
-abstraction. The current abstraction implementation needs more work before
-it's reliable enough for release, so this version only has basic arrayref
-support.
-
-=item * Formatters for converting raw cell data into printable format
-(without having to go through a separate widget)
 
 =item * Column and cell highlighting modes
 
@@ -1164,7 +1282,19 @@ widgets. Does not support scrolling and performance isn't as good, so it will ev
 
 =head1 AUTHOR
 
-Tom Molesworth <cpan@entitymodel.com>
+Tom Molesworth <cpan@perlsite.co.uk>
+
+=head1 CONTRIBUTORS
+
+With thanks to the following for contribution:
+
+=over 4
+
+=item * Paul "LeoNerd" Evans for testing and suggestions on storage/abstraction handling
+
+=item * buu, for testing and patches
+
+=back
 
 =head1 LICENSE
 
