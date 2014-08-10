@@ -252,6 +252,7 @@ sub add_column {
 	$args{align} ||= 0;
 	$args{visible} //= 1;
 	$args{transform} ||= [];
+	$args{transform} = [ $args{transform} ] unless ref $args{transform} eq 'ARRAY';
 	push @{$self->{columns}}, \%args;
 	$self
 }
