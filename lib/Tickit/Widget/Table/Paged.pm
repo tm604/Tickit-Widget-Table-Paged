@@ -838,10 +838,15 @@ sub window_gained {
 	my $self = shift;
 	$self->SUPER::window_gained(@_);
 	my $win = $self->window;
+
+	# Row cache starts as empty. We should really
+	# preserve any previous values here.
+	$self->{row_cache} = [
+		(undef) x ($self->body_lines * 3)
+	];
+
+	# Default anyway in newer versions
 	$win->set_expose_after_scroll(1) if $win->can('set_expose_after_scroll');
-# reshape will do this already
-#	$self->distribute_columns;
-#	$self->apply_column_widget;
 }
 
 =head2 expose_rows
