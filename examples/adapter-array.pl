@@ -22,12 +22,7 @@ vbox {
 			label => 'Item',
 		);
 		my $adapter = $w->adapter;
-		my @words = qw(
-			One Two Three Four Five Six Seven Eight Nine Ten
-			Eleven Twelve Thirteen Fourteen Fifteen Sixteen Seventeen Eighteen Nineteen Twenty
-			Twenty-one Twenty-two Twenty-three
-		);
-		$adapter->append(0, [map [$_], map $words[rand @words], 1..200]);
+		$adapter->insert(0, [map [$_], map "line $_", 1..200]);
 		$w
 	} expand => 1;
 };
