@@ -644,6 +644,10 @@ sub render_row {
 	);
 	for my $col (0..$#$data) {
 		my $v = $self->apply_view_transformations($row, $col, $data->[$col]);
+		my $def = $self->{columns}[$col];
+		$rb->goto($line, $def->{start});
+		my ($pre, undef, $post) = align textwidth($v), $def->{value}, $def->{align};
+		$rb->erase($pre, $base_pen) if $pre;
 		if(blessed($v) && $v->isa('String::Tagged')) {
 			# Copy before modifying, might be overkill?
 			my $st = String::Tagged->new($v);
@@ -651,7 +655,6 @@ sub render_row {
 				my ($k, $left, $right) = @_;
 				return $left eq $right;
 			});
-			$rb->goto($line, $col * 20);
 			$st->iter_substr_nooverlap(sub {
 				my ($substr, %tags) = @_;
 				my $pen = Tickit::Pen::Immutable->new(
@@ -660,11 +663,10 @@ sub render_row {
 				);
 				$rb->text($substr, $pen);
 			});
-			$rb->erase_to($col + 20, $base_pen);
 		} else {
-			$rb->text_at($line, $col, $v, $base_pen);
-			$rb->erase_at($line, $col + textwidth($v), 20 - textwidth($v), $base_pen);
+			$rb->text($v, $base_pen);
 		}
+		$rb->erase($post, $base_pen) if $post;
 	}
 }
 
