@@ -538,20 +538,34 @@ When scrolling, ensure our row cache
 sub on_scroll {
 	my ($self, $offset) = @_;
 	die "undef offset" unless defined $offset;
+
+	# Our row cache is a scrolling fixed-size window over the previous,
+	# current and next page, so any removals need to be compensated by
+	# empty items at the other end
 	my @replace = (undef) x ($offset < 0 ? -$offset : $offset);
+
 	my @removed;
 	if($offset > 0) {
 		# Scrolling down means we throw away the first N rows
-		@removed = splice @{$self->{row_cache}}, 0, $offset, @replace;
+		@removed = splice @{$self->{row_cache}}, 0, $offset;
+		push @{$self->{row_cache}}, @replace;
 	} else {
 		# and in the other direction, last N rows
 		@removed = splice @{$self->{row_cache}}, @{$self->{row_cache}} + $offset, -$offset, @replace;
+		unshift @{$self->{row_cache}}, @replace;
 	}
+
 	# Any items that were still in progress are no longer required, make
 	# sure we cancel them to avoid unnecessary work.
 	$_->cancel for grep defined($_) && !$_->is_ready, @removed;
-	# Prime the cache for the missing entries
-	# $self->row_cache($self->idx_from_row_cache($_)) for grep !defined($self->{row_cache}[$_]), 0..$#{$self->{row_cache}}; 
+
+	return $self if exists $self->{cache_primer};
+	$self->{cache_primer} = 1;
+	$self->window->tickit->later(sub {
+		# Prime the cache for the missing entries
+		$self->row_cache($self->idx_from_row_cache($_)) for grep !defined($self->{row_cache}[$_]), 0..$#{$self->{row_cache}}; 
+		delete $self->{cache_primer};
+	});
 	$self
 }
 
