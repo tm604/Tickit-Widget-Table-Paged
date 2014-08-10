@@ -1018,11 +1018,12 @@ Go up a page.
 
 sub key_previous_page {
 	my $self = shift;
-	$self->{highlight_row} -= $self->scroll_dimension;
-	$self->{row_offset} -= $self->scroll_dimension;
-	$self->{highlight_row} = 0 if $self->{highlight_row} < 0;
-	$self->{row_offset} = 0 if $self->{row_offset} < 0;
-	$self->redraw;
+	$self->scroll_highlight(-$self->scroll_dimension);
+#	$self->{highlight_row} -= $self->scroll_dimension;
+#	$self->{row_offset} -= $self->scroll_dimension;
+#	$self->{highlight_row} = 0 if $self->{highlight_row} < 0;
+#	$self->{row_offset} = 0 if $self->{row_offset} < 0;
+#	$self->redraw;
 }
 
 =head2 key_next_page
@@ -1033,13 +1034,15 @@ Go down a page.
 
 sub key_next_page {
 	my $self = shift;
-	$self->{highlight_row} += $self->scroll_dimension;
-	$self->{row_offset} += $self->scroll_dimension;
-	$self->{highlight_row} = $self->row_count - 1 if $self->{highlight_row} > $self->row_count - 1;
-	my $max = $self->row_count > $self->scroll_dimension ? -1 + $self->row_count - $self->scroll_dimension : 0;
-	$self->{row_offset} = $max if $self->{row_offset} > $max;
-	$self->redraw;
+	$self->scroll_highlight($self->scroll_dimension);
 }
+#	$self->{highlight_row} += $self->scroll_dimension;
+#	$self->{row_offset} += $self->scroll_dimension;
+#	$self->{highlight_row} = $self->row_count - 1 if $self->{highlight_row} > $self->row_count - 1;
+#	my $max = $self->row_count > $self->scroll_dimension ? -1 + $self->row_count - $self->scroll_dimension : 0;
+#	$self->{row_offset} = $max if $self->{row_offset} > $max;
+#	$self->redraw;
+#}
 
 =head2 scroll_position
 
