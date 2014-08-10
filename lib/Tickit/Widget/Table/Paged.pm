@@ -151,21 +151,34 @@ sub new {
 		on_activate
 		multi_select
 		adapter
+		item_transformations
+		col_transformations
+		cell_transformations
+		columns
+		highlight_row
 	);
 	my $self = $class->SUPER::new(@_);
-	$self->{row_cache} = [ ];
-	$self->{item_transformations} = [ ];
-	$self->{col_transformations} = [ ];
-	$self->{cell_transformations} = { };
 
-	$self->{columns} = [];
-	$self->{highlight_row} = 0;
-	$self->on_activate($attr{on_activate}) if $attr{on_activate};
-	$self->multi_select($attr{multi_select} || 0);
+	# First we assign the adapter, since it might be used elsewhere
 	$attr{adapter} ||= Adapter::Async::OrderedList::Array->new(
 		data => $attr{data} || []
 	);
-	$self->on_adapter_change($attr{adapter});
+	$self->on_adapter_change(delete $attr{adapter});
+
+	# Special-case parameters which need method calls
+	$self->on_activate(delete $attr{on_activate}) if $attr{on_activate};
+	$self->multi_select(delete $attr{multi_select} || 0);
+
+	# Some defaults
+	$attr{item_transformations} ||= [ ];
+	$attr{col_transformations} ||= [ ];
+	$attr{cell_transformations} ||= { };
+	$attr{columns} ||= [];
+	$attr{highlight_row} //= 0;
+
+	# Apply our attributes now
+	$self->{$_} = $attr{$_} for keys %attr;
+
 	$self->take_focus;
 	$self
 }
