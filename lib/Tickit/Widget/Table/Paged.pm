@@ -48,7 +48,7 @@ This abstraction should allow access to larger datasets than would fit in
 available memory, such as a database table or procedurally-generated data.
 
 See L<Adapter::Async::OrderedList::Array> if your data is stored in a Perl
-array.
+array. Other subclasses may be available if you have a different source.
 
 =cut
 
