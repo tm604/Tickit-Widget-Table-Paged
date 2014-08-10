@@ -233,6 +233,10 @@ Add a new column. Takes the following named parameters:
 
 =item * align - (optional) align left, center or right
 
+=item * transform - (optional) list of transformations to apply
+
+=item * visible - (optional) true if this column should be shown
+
 =back
 
 Returns $self.
@@ -248,6 +252,8 @@ sub add_column {
 	$args{type} ||= 'text';
 	$args{align} = $ALIGNMENT_TYPE{$args{align}} if defined($args{align}) && exists $ALIGNMENT_TYPE{$args{align}};
 	$args{align} ||= 0;
+	$args{visible} //= 1;
+	$args{transform} ||= [];
 	push @{$self->{columns}}, \%args;
 	$self
 }
