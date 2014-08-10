@@ -379,6 +379,7 @@ rows are not included in this list.
 
 sub visible_lines {
 	my $self = shift;
+	# REALLYFIXME This would be better if it actually worked
 	# FIXME This could be more efficient
 	#warn "slice: $_\n", for $self->adapter->slice($self->row_offset, $self->scroll_dimension);
 	return +(grep !(ref($_) // 'main')->isa('Tickit::Widget::Table::Paged::HiddenRow'), $self->adapter->slice($self->row_offset, $self->scroll_dimension));
