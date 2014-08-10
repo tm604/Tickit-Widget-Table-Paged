@@ -47,19 +47,21 @@ query the adapter for the current "page" of values.
 This abstraction should allow access to larger datasets than would fit in
 available memory, such as a database table or procedurally-generated data.
 
-See L<Tickit::Widget::Table::Paged::Adapter::Array> for a simple implementation
-using a Perl arrayref.
+See L<Adapter::Async::OrderedList::Array> if your data is stored in a Perl
+array.
 
 =cut
 
 use Tickit::RenderBuffer qw(LINE_SINGLE LINE_DOUBLE CAP_BOTH);
-use Tickit::Utils qw(distribute substrwidth align textwidth);
+use Tickit::Utils qw(distribute substrwidth align textwidth chars2cols);
+use String::Tagged;
+use Future::Utils qw(fmap_void);
 use Tickit::Style;
-use Scalar::Util qw(looks_like_number);
+use Scalar::Util qw(looks_like_number blessed);
 use POSIX qw(floor);
 
-use Tickit::Widget::Table::Adapter;
-use Tickit::Widget::Table::Adapter::Array;
+use Adapter::Async::OrderedList;
+use Adapter::Async::OrderedList::Array;
 
 use constant CLEAR_BEFORE_RENDER => 0;
 use constant KEYPRESSES_FROM_STYLE => 1;
@@ -130,7 +132,10 @@ see L</on_activate> for more details.
 =item * multi_select - when set, the widget will allow selection of multiple
 rows (typically by pressing Space to toggle a given row)
 
-=item * adapter - a L<Tickit::Widget::Table::Adapter> instance
+=item * adapter - an L<Adapter::Async::OrderedList::Array> instance
+
+=item * data - alternative to passing an adapter, if you want to wrap an existing
+array without creating an L<Adapter::Async::OrderedList> subclass yourself
 
 =back
 
@@ -148,38 +153,35 @@ sub new {
 		adapter
 	);
 	my $self = $class->SUPER::new(@_);
+	$self->{visible_map} = [ ];
+	$self->{item_transformations} = [ ];
+	$self->{col_transformations} = [ ];
+	$self->{cell_transformations} = { };
+
 	$self->{columns} = [];
 	$self->{highlight_row} = 0;
 	$self->on_activate($attr{on_activate}) if $attr{on_activate};
 	$self->multi_select($attr{multi_select} || 0);
-	$attr{adapter} ||= Tickit::Widget::Table::Adapter::Array->new;
-	$self->adapter($attr{adapter});
+	$attr{adapter} ||= Adapter::Async::OrderedList::Array->new(
+		data => $attr{data} || []
+	);
+	$self->on_adapter_change($attr{adapter});
 	$self->take_focus;
 	$self
 }
 
-sub adapter {
-	my $self = shift;
-	return $self->{adapter} unless @_;
-	$self->{adapter} = shift;
-	return $self;
-}
+sub adapter { shift->{adapter} }
 
-=head1 METHODS - Table content
+=head2 bus
 
-=head2 data
-
-Returns the table's current data content as an arrayref.
-
-Note that it is not recommended to make any changes to this
-data structure - you are responsible for triggering any
-necessary redrawing or resizing logic if you choose to do so.
+Bus for event handling. Normally an L<Adapter::Async::Bus> instance
+shared by the adapter.
 
 =cut
 
-sub data {
-	shift->adapter
-}
+sub bus { $_[0]->{bus} ||= $_[0]->adapter->bus }
+
+=head1 METHODS - Table content
 
 =head2 clear
 
