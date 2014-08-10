@@ -2,9 +2,14 @@ Revision history for {{$dist->name}}
 
 {{$NEXT}}
 	New features:
+	* Adapter support - underlying data is provided by an
+	Adapter::Async::OrderedList instance, allowing the table widget to
+	receive updates when the underlying data source changes
 	* Row visibility - allows filtering rows to show a subset of data,
 	see the ->filter method for more details
-	* Row update and delete
+	* Transformations - used for applying specific formatting or text
+	conversion, such as timestamp => date and time representation or
+	word highlighting
 
 	Bugs fixed:
 	* Avoid warnings when no alignment is specified (default is 'left')
