@@ -217,7 +217,7 @@ sub is_row_visible {
 
 sub expose_row {
 	my $self = shift;
-	$self->redraw; # if $self->is_row_visible;
+	$self->window->expose;
 	return $self;
 }
 
