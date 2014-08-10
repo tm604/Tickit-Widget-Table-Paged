@@ -897,46 +897,39 @@ Update scroll information after changing highlight position.
 
 sub scroll_highlight {
 	my $self = shift;
-	my $up = shift;
+	my $offset = shift;
 	return $self unless my $win = $self->window;
 
 	return $self unless my $scrollbar_rect = $self->active_scrollbar_rect;
 	my $old = $self->highlight_visible_row;
 	my $redraw_rect = Tickit::RectSet->new;
 	$redraw_rect->add($scrollbar_rect);
-	if($up) {
-		--$self->{highlight_row};
-		#--$self->{row_offset};
-	} else {
-		++$self->{highlight_row};
-		#++$self->{row_offset};
-	}
+	$self->{highlight_row} += $offset;
+	$self->{row_offset} += $offset;
 
-	my $direction = $up ? -1 : 1;
-	$redraw_rect->add($scrollbar_rect->translate($direction, 0));
+	$redraw_rect->add($scrollbar_rect->translate($offset, 0));
 	$redraw_rect->add($_) for $self->expose_rows($old, $self->highlight_visible_row);
 
 	my $hdr = $self->header_lines;
-	$win->scrollrect($hdr, 0, $win->lines - $hdr, $win->cols, $direction, 0);
-	$win->expose($_) for map $_->translate(-$direction, 0), $redraw_rect->rects;
+	$win->scrollrect($hdr, 0, $win->lines - $hdr, $win->cols, $offset, 0);
+	$self->on_scroll($offset);
+	$win->expose($_) for map $_->translate(-$offset, 0), $redraw_rect->rects;
 }
 
 =head2 move_highlight
 
-Change the highlighted row.
+Move the highlighted row by the given offset (can be negative to move up).
 
 =cut
 
 sub move_highlight {
 	my $self = shift;
-	my $up = shift;
+	my $offset = shift;
 	return $self unless my $win = $self->window;
+
 	my $old = $self->highlight_visible_row;
-	if($up) {
-		--$self->{highlight_row};
-	} else {
-		++$self->{highlight_row};
-	}
+	$self->{highlight_row} += $offset;
+
 	$win->expose($_) for $self->expose_rows($old, $self->highlight_visible_row);
 	$self
 }
@@ -952,8 +945,8 @@ sub key_previous_row {
 	return $self unless my $win = $self->window;
 	return $self if $self->{highlight_row} <= 0;
 
-	return $self->move_highlight(1) if $self->highlight_visible_row >= 1;
-	return $self->scroll_highlight(1);
+	return $self->move_highlight(-1) if $self->highlight_visible_row >= 1;
+	return $self->scroll_highlight(-1);
 }
 
 =head2 key_next_row
@@ -967,8 +960,8 @@ sub key_next_row {
 	return $self unless my $win = $self->window;
 	return $self if $self->{highlight_row} >= $self->row_count - 1;
 
-	return $self->move_highlight(0) if $self->highlight_visible_row < $win->lines - 2;
-	return $self->scroll_highlight(0);
+	return $self->move_highlight(1) if $self->highlight_visible_row < $win->lines - 2;
+	return $self->scroll_highlight(1);
 }
 
 =head2 key_first_row
