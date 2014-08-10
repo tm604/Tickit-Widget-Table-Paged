@@ -927,8 +927,14 @@ sub scroll_highlight {
 	}
 	return $self unless my $scrollbar_rect = $self->active_scrollbar_rect;
 	my $old = $self->highlight_visible_row;
+
+	# FIXME Work out the changed extents on the
+	# scrollbar, and just update those - note that
+	# T::W::ScrollBar should already have this logic
+	# somewhere, as does ProgressBar
 	my $redraw_rect = Tickit::RectSet->new;
 	$redraw_rect->add($scrollbar_rect);
+
 	$self->{highlight_row} += $offset;
 	$self->{row_offset} += $offset;
 
