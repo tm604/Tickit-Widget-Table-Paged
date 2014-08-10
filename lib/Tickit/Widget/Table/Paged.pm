@@ -583,7 +583,8 @@ sub row_cache {
 
 			# Somewhat tedious way to reduce() a Future chain
 			(fmap_void {
-				shift->($row, $item)->on_done(sub {
+				my $code = shift;
+				Future->call(sub { $code->($row, $item) })->on_done(sub {
 					$item = shift
 				})
 			} foreach => [ @{$self->{item_transformations}} ])->transform(
@@ -597,14 +598,16 @@ sub row_cache {
 				my $cell = $item->[$col];
 				push @pending, (
 					fmap_void {
-						shift->($row, $col, $cell)->on_done(sub {
+						my $code = shift;
+						Future->call(sub { $code->($row, $col, $cell) })->on_done(sub {
 							$cell = shift
 						})
 					} foreach => [ @{$self->{columns}[$col]{transform} || [] } ]
 				)->then(sub {
 					# hey look at all these optimisations we're not doing
 					fmap_void {
-						shift->($row, $col, $cell)->on_done(sub {
+						my $code = shift;
+						Future->call(sub { $code->($row, $col, $cell) })->on_done(sub {
 							$cell = shift
 						})
 					} foreach => [ @{$self->{cell_transformations}{"$row,$col"} || []} ]
