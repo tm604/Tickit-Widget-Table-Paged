@@ -55,7 +55,7 @@ array. Other subclasses may be available if you have a different source.
 use Tickit::RenderBuffer qw(LINE_SINGLE LINE_DOUBLE CAP_BOTH);
 use Tickit::Utils qw(distribute substrwidth align textwidth chars2cols);
 use String::Tagged;
-use Future::Utils qw(fmap_void);
+use Future::Utils qw(fmap_void repeat);
 use Tickit::Style;
 use Scalar::Util qw(looks_like_number blessed);
 use POSIX qw(floor);
@@ -569,6 +569,17 @@ sub on_scroll {
 	$self
 }
 
+sub fold_future {
+	my ($self, $prefix, $item, @steps) = @_;
+	return Future->wrap($item) unless @steps;
+	repeat {
+		my $code = shift;
+		Future->call(sub { $code->(@$prefix, $item) })->on_done(sub {
+			$item = shift
+		})
+	} foreach => \@steps
+}
+
 sub row_cache {
 	my ($self, $row) = @_;
 	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
@@ -582,14 +593,7 @@ sub row_cache {
 			return Future->fail('no such element') unless $item;
 
 			# Somewhat tedious way to reduce() a Future chain
-			(fmap_void {
-				my $code = shift;
-				Future->call(sub { $code->($row, $item) })->on_done(sub {
-					$item = shift
-				})
-			} foreach => [ @{$self->{item_transformations}} ])->transform(
-				done => sub { $item }
-			);
+			$self->fold_future([ $row ], $item, @{$self->{item_transformations}})
 		})->then(sub {
 			# Our item is now accessible as an arrayref, start working on the columns
 			my $item = shift;
@@ -597,23 +601,11 @@ sub row_cache {
 			for my $col (0..$#{$self->{columns}}) {
 				my $cell = $item->[$col];
 				push @pending, (
-					fmap_void {
-						my $code = shift;
-						Future->call(sub { $code->($row, $col, $cell) })->on_done(sub {
-							$cell = shift
-						})
-					} foreach => [ @{$self->{columns}[$col]{transform} || [] } ]
+					$self->fold_future([ $row, $col ], $cell, @{$self->{columns}[$col]{transform} || [] })
 				)->then(sub {
 					# hey look at all these optimisations we're not doing
-					fmap_void {
-						my $code = shift;
-						Future->call(sub { $code->($row, $col, $cell) })->on_done(sub {
-							$cell = shift
-						})
-					} foreach => [ @{$self->{cell_transformations}{"$row,$col"} || []} ]
-				})->transform(
-					done => sub { $cell }
-				);
+					$self->fold_future([ $row, $col ], shift, @{$self->{cell_transformations}{"$row,$col"} || []})
+				})->on_fail(sub { warn "Fail: @_\n" })
 			}
 			# our transform at the tail of each Future chain should ensure that we
 			# end up with a helpful list of cells for this item. One last thing to
