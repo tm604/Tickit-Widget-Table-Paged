@@ -914,6 +914,12 @@ sub scroll_highlight {
 	my $offset = shift;
 	return $self unless my $win = $self->window;
 
+	if($self->highlight_row + $offset < 0) {
+		$offset = -$self->highlight_row;
+	}
+	if($self->highlight_row + $offset > $self->row_count - 1) {
+		$offset = $self->row_count - $self->highlight_row;
+	}
 	return $self unless my $scrollbar_rect = $self->active_scrollbar_rect;
 	my $old = $self->highlight_visible_row;
 	my $redraw_rect = Tickit::RectSet->new;
