@@ -520,6 +520,8 @@ sub highlight_visible_row {
 	return $self->{highlight_row} - $self->row_offset;
 }
 
+sub loading_message { 'Loading...' }
+
 =head1 METHODS - Rendering
 
 =head2 render_to_rb
