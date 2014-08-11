@@ -64,7 +64,7 @@ Apply to:
 
 =back
 
-Row:
+=head3 Item transformations
 
 This takes the original data item for the row, and returns one of the following:
 
@@ -98,7 +98,7 @@ For the ORM example, something like this:
   )
  });
 
-Column:
+=head3 Column transformations
 
 Column transformations are used to apply styles and formats.
 
@@ -117,6 +117,8 @@ Example date+colour transformation on column:
   );
  });
 
+=head3 Cell transformations
+
 Cell transformations are for cases where you need fine control over individual components. They operate similarly to column transformations,
 taking the input value and returning either a string or a Future.
 
@@ -130,7 +132,10 @@ Typical example would be a spreadsheet:
   return "$v"
  });
 
+=head3 View transformations
 
+This happen every time the row is rendered. They provide the ability to do view-specific modification,
+such as replacing long strings with an elided version ("Some lengthy messa...")
 
 =cut
 
