@@ -369,21 +369,6 @@ Current row offset (vertical scroll position).
 
 sub row_offset { shift->{row_offset} //= 0 }
 
-=head2 visible_lines
-
-Returns the list of rows (as arrayrefs) currently visible in the display. Hidden
-rows are not included in this list.
-
-=cut
-
-sub visible_lines {
-	my $self = shift;
-	# REALLYFIXME This would be better if it actually worked
-	# FIXME This could be more efficient
-	#warn "slice: $_\n", for $self->adapter->slice($self->row_offset, $self->scroll_dimension);
-	return +(grep !(ref($_) // 'main')->isa('Tickit::Widget::Table::Paged::HiddenRow'), $self->adapter->slice($self->row_offset, $self->scroll_dimension));
-}
-
 =head2 header_rect
 
 Returns the L<Tickit::Rect> representing the header area.
@@ -973,13 +958,6 @@ sub row_count {
 	$self->{item_count};
 }
 
-sub visible_data {
-	my $self = shift;
-	@{ $self->{visible_data} ||= [
-		grep !ref($_)->isa('Tickit::Widget::Table::Paged::HiddenRow'), $self->adapter->slice(0, $self->adapter->count)
-	] }
-}
-
 =head2 sb_height
 
 Current scrollbar height.
@@ -1117,7 +1095,6 @@ sub key_select_toggle {
 # NYI
 sub row_visibility_changed {
 	my $self = shift;
-	delete $self->{visible_data}
 }
 
 =head2 row_visibility
@@ -1176,7 +1153,6 @@ sub filter {
 		my $row = $self->adapter->get($idx);
 		$self->row_visibility($idx, $filter->($row));
 	}
-	delete $self->{visible_data};
 	$self->redraw;
 }
 
