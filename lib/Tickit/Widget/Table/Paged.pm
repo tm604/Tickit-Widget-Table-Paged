@@ -640,15 +640,9 @@ sub render_body {
 		if($f->is_done) {
 			$self->render_row($rb, $rect, $idx, $f->get);
 		} elsif($f->is_ready) {
-			next unless defined $self->{item_count};
-
-			# Use this as our count if we don't have one
-			# yet, since it might be a reasonable estimate
-			$self->{item_count} = $idx - 1;
-			$self->adapter->count->on_done(sub {
-				$self->{item_count} = shift
-			});
+			$self->render_failed_row($rb, $rect, $idx, $f->is_cancelled ? 'cancelled' : $f->get);
 		} else {
+			$self->render_pending_row($rb, $rect, $idx);
 			$f->on_done($self->curry::expose_row($idx));
 		}
 	}
