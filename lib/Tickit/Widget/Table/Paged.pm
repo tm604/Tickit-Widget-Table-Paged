@@ -1199,11 +1199,15 @@ sub on_adapter_change {
 	undef $self->{item_count};
 	return $self unless $adapter;
 
+	# Want weakrefs in here, because we're storing the subscriptions
+	# for later cleanup. 
 	$self->bus->subscribe_to_event(@{
 		$self->{adapter_subscriptions} = [
 			splice => $self->curry::weak::on_splice_event,
+			clear  => $self->curry::weak::on_clear_event,
 		]
 	});
+
 	$self->adapter->count->on_done(sub {
 		$self->{item_count} = shift
 	});
@@ -1236,6 +1240,21 @@ sub on_splice_event {
 	}
 }
 
+=head2 on_clear_event
+
+Called by the adapter when all data has been removed from the
+data source.
+
+=cut
+
+sub on_clear_event {
+	my ($self, $ev) = @_;
+	$self->{highlight_row} = 0;
+	$self->{item_count} = 0;
+	if(my $win = $self->window) {
+		$win->expose;
+	}
+}
 
 1;
 
