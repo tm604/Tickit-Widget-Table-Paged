@@ -699,6 +699,43 @@ sub render_row {
 	}
 }
 
+sub render_failed_row {
+	my ($self, $rb, $rect, $row, $failure) = @_;
+
+	my $line = $self->row_from_idx($row);
+	my $base_pen = $self->get_style_pen(
+		($row == $self->highlight_row)
+		? 'highlight'
+		: ($self->multi_select && $self->{selected}{$line + $self->row_offset - 1})
+		? 'selected'
+		: 'failed'
+	);
+
+		$rb->goto($line, 0);
+		my ($pre, undef, $post) = align textwidth($failure), $self->body_cols, 0.5;
+		$rb->erase($pre, $base_pen) if $pre;
+		$rb->text($failure, $base_pen);
+		$rb->erase($post, $base_pen) if $post;
+}
+sub render_pending_row {
+	my ($self, $rb, $rect, $row) = @_;
+
+	my $line = $self->row_from_idx($row);
+	my $base_pen = $self->get_style_pen(
+		($row == $self->highlight_row)
+		? 'highlight'
+		: ($self->multi_select && $self->{selected}{$line + $self->row_offset - 1})
+		? 'selected'
+		: 'pending'
+	);
+
+		$rb->goto($line, 0);
+		my ($pre, undef, $post) = align textwidth($self->loading_message), $self->body_cols, 0.5;
+		$rb->erase($pre, $base_pen) if $pre;
+		$rb->text($self->loading_message, $base_pen);
+		$rb->erase($post, $base_pen) if $post;
+}
+
 =head2 on_scroll
 
 Update row cache to reflect a scroll event.
