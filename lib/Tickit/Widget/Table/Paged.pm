@@ -53,9 +53,16 @@ array. Other subclasses may be available if you have a different source.
 =head2 Transformations
 
 Apply to:
-* Row
-* Column
-* Cell
+
+=over 4
+
+=item * Row
+
+=item * Column
+
+=item * Cell
+
+=back
 
 Row:
 
