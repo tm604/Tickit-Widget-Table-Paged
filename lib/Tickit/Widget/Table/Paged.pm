@@ -202,9 +202,8 @@ Clear all data in the table.
 
 sub clear {
 	my $self = shift;
+	# Let our event handler take care of any required cleanup here
 	$self->adapter->clear;
-	$self->{highlight_row} = 0;
-	$self->redraw;
 	$self
 }
 
@@ -1213,6 +1212,13 @@ sub on_adapter_change {
 	});
 	$self
 }
+
+=head2 on_splice_event
+
+Invoked by the adapter when data is added to or removed from
+the data source.
+
+=cut
 
 sub on_splice_event {
 	my ($self, $ev, $idx, $len, $data) = @_;
