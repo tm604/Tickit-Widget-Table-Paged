@@ -1176,8 +1176,18 @@ sub unselect_hidden_rows {
 	$self
 }
 
+=head2 on_adapter_change
+
+Applies a new adapter, taking care of any cleanup if there was an
+adapter previously active.
+
+Can be passed undef, to remove the adapter completely.
+
+=cut
+
 sub on_adapter_change {
 	my ($self, $adapter) = @_;
+
 	if(my $old = $self->{adapter}) {
 		$old->bus->unsubscribe_from_event(
 			@{$self->{adapter_subscriptions}}
