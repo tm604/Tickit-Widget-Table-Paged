@@ -429,6 +429,109 @@ sub scrollbar_rect {
 	);
 }
 
+=head2 header_lines
+
+Returns the number of lines in the header. Hardcoded to 1.
+
+=cut
+
+sub header_lines { 1 }
+
+=head2 body_lines
+
+Returns the number of lines in the body.
+
+=cut
+
+sub body_lines { $_[0]->window->lines - $_[0]->header_lines }
+
+=head2 idx_from_row
+
+Returns a storage index from a body row index.
+
+=cut
+
+sub idx_from_row {
+	my ($self, $row) = @_;
+	return $self->row_offset + $row - $self->header_lines;
+}
+
+=head2 row_from_idx
+
+Returns a body row index from a storage index.
+
+=cut
+
+sub row_from_idx {
+	my ($self, $idx) = @_;
+	return $self->header_lines + $idx - $self->row_offset;
+}
+
+=head2 row_cache_idx
+
+Returns a row cache offset from a storage index.
+
+=cut
+
+sub row_cache_idx {
+	my ($self, $idx) = @_;
+	die "no window yet" unless $self->window;
+	return $self->body_lines + $idx - $self->row_offset;
+}
+
+=head2 idx_from_row_cache
+
+Returns a storage index from a row cache offset.
+
+=cut
+
+sub idx_from_row_cache {
+	my ($self, $row) = @_;
+	return $row + $self->row_offset - $self->body_lines;
+}
+
+=head2 highlight_row
+
+Returns the index of the currently-highlighted row.
+
+=cut
+
+sub highlight_row {
+	my $self = shift;
+	return $self->{highlight_row};
+}
+
+=head2 highlight_visible_row
+
+Returns the position of the highlighted row taking scrollbar into account.
+
+=cut
+
+sub highlight_visible_row {
+	my $self = shift;
+	return $self->{highlight_row} - $self->row_offset;
+}
+
+=head1 METHODS - Rendering
+
+=head2 render_to_rb
+
+Render the table. Called from expose events.
+
+=cut
+
+sub render_to_rb {
+	my ($self, $rb, $rect) = @_;
+	my $win = $self->window;
+	$self->{highlight_row} ||= 0;
+
+	$self->render_header($rb, $rect);
+	$self->render_body($rb, $rect);
+	$self->render_scrollbar($rb, $rect) if $self->vscroll;
+	my $highlight_pos = 1 + $self->highlight_visible_row;
+	$win->cursor_at($highlight_pos, 0);
+}
+
 =head2 render_header
 
 Render the header area.
@@ -436,7 +539,11 @@ Render the header area.
 =cut
 
 sub render_header {
-	my ($self, $rb) = @_;
+	my ($self, $rb, $rect) = @_;
+
+	$rect = $rect->intersect($self->header_rect)
+		or return $self;
+
 	$rb->goto(0, 0);
 	for (@{$self->{columns}}) {
 		if(($_->{type} // '') eq 'padding') {
@@ -450,27 +557,49 @@ sub render_header {
 	$rb->text(' ', $self->get_style_pen('header')) if $self->vscroll;
 }
 
-=head2 render_to_rb
+=head2 render_scrollbar
 
-Render the table.
+Render the scrollbar.
 
 =cut
 
-sub render_to_rb {
+sub render_scrollbar {
 	my ($self, $rb, $rect) = @_;
-	my $win = $self->window;
-	$self->{highlight_row} ||= 0;
+	return $self unless my $win = $self->window;
 
-	$self->render_header($rb, $rect) if $rect->intersects($self->header_rect);
-	$self->render_body($rb, $rect);
-	$self->render_scrollbar($rb, $rect) if $self->vscroll && $rect->intersects($self->scrollbar_rect);
-	my $highlight_pos = 1 + $self->highlight_visible_row;
-	$win->cursor_at($highlight_pos, 0);
+	$rect = $rect->intersect($self->scrollbar_rect)
+		or return $self;
+
+	my $cols = $win->cols - 1;
+	my $h = $win->lines - 1;
+
+	# Need to clear any line content first, since we may be overwriting part of
+	# the previous scrollbar rendering here
+	$rb->eraserect(
+		Tickit::Rect->new(
+			top => 1,
+			left => $cols,
+			right => $cols,
+			bottom => $h,
+		)
+	);
+	if(my ($min, $max) = map 1 + $_, $self->scroll_rows) {
+	# warn "sb min: $min, max $max h $h\n";
+		# Scrollbar should be shown, since we don't have all rows visible on the screen at once
+		$rb->vline_at(1, $min - 1, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $min > 1;
+		$rb->vline_at($min, $max, $cols, LINE_DOUBLE, $self->get_style_pen('scroll'), CAP_BOTH);
+		$rb->vline_at($max + 1, $h, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $max < $h;
+	} else {
+		# Placeholder scrollbar - just render it as empty
+		$rb->vline_at(1, $h, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH);
+	}
 }
 
-sub row_exposed {
-	my ($self, $rb, $rect, $row) = @_;
-}
+=head2 render_body
+
+Render the table body.
+
+=cut
 
 sub render_body {
 	my ($self, $rb, $rect) = @_;
@@ -502,123 +631,11 @@ sub render_body {
 	}
 }
 
-sub header_lines { 1 }
-sub body_lines { $_[0]->window->lines - $_[0]->header_lines }
+=head2 render_row
 
-sub idx_from_row {
-	my ($self, $row) = @_;
-	return $self->row_offset + $row - $self->header_lines;
-}
-
-sub row_from_idx {
-	my ($self, $idx) = @_;
-	return $self->header_lines + $idx - $self->row_offset;
-}
-
-sub row_cache_idx {
-	my ($self, $idx) = @_;
-	die "no window yet" unless $self->window;
-	return $self->body_lines + $idx - $self->row_offset;
-}
-
-sub idx_from_row_cache {
-	my ($self, $row) = @_;
-	return $row + $self->row_offset - $self->body_lines;
-}
-
-=head2 on_scroll
-
-When scrolling, ensure our row cache
+Renders a given row, using storage index.
 
 =cut
-
-sub on_scroll {
-	my ($self, $offset) = @_;
-	die "undef offset" unless defined $offset;
-
-	# Our row cache is a scrolling fixed-size window over the previous,
-	# current and next page, so any removals need to be compensated by
-	# empty items at the other end
-	my @replace = (undef) x ($offset < 0 ? -$offset : $offset);
-
-	my @removed;
-	if($offset > 0) {
-		# Scrolling down means we throw away the first N rows
-		@removed = splice @{$self->{row_cache}}, 0, $offset;
-		push @{$self->{row_cache}}, @replace;
-	} else {
-		# and in the other direction, last N rows
-		@removed = splice @{$self->{row_cache}}, @{$self->{row_cache}} + $offset, -$offset, @replace;
-		unshift @{$self->{row_cache}}, @replace;
-	}
-
-	# Any items that were still in progress are no longer required, make
-	# sure we cancel them to avoid unnecessary work.
-	$_->cancel for grep defined($_) && !$_->is_ready, @removed;
-
-	return $self if exists $self->{cache_primer};
-	$self->{cache_primer} = 1;
-	$self->window->tickit->later(sub {
-		# Prime the cache for the missing entries
-		$self->row_cache($self->idx_from_row_cache($_)) for grep !defined($self->{row_cache}[$_]), 0..$#{$self->{row_cache}}; 
-		delete $self->{cache_primer};
-	});
-	$self
-}
-
-sub fold_future {
-	my ($self, $prefix, $item, @steps) = @_;
-	return Future->wrap($item) unless @steps;
-	repeat {
-		my $code = shift;
-		Future->call(sub { $code->(@$prefix, $item) })->on_done(sub {
-			$item = shift
-		})
-	} foreach => \@steps
-}
-
-sub row_cache {
-	my ($self, $row) = @_;
-	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
-		$self->adapter->get(
-			items => [$row],
-		)->then(sub {
-			# We have an item from storage. No idea what it is, could be an
-			# object, hashref, arrayref... the item transformations will
-			# convert it into something usable
-			my ($item) = @{ $_[0] };
-			return Future->fail('no such element') unless $item;
-
-			# Somewhat tedious way to reduce() a Future chain
-			$self->fold_future([ $row ], $item, @{$self->{item_transformations}})
-		})->then(sub {
-			# Our item is now accessible as an arrayref, start working on the columns
-			my $item = shift;
-			my @pending;
-			for my $col (0..$#{$self->{columns}}) {
-				my $cell = $item->[$col];
-				push @pending, (
-					$self->fold_future([ $row, $col ], $cell, @{$self->{columns}[$col]{transform} || [] })
-				)->then(sub {
-					# hey look at all these optimisations we're not doing
-					$self->fold_future([ $row, $col ], shift, @{$self->{cell_transformations}{"$row,$col"} || []})
-				})->on_fail(sub { warn "Fail: @_\n" })
-			}
-			# our transform at the tail of each Future chain should ensure that we
-			# end up with a helpful list of cells for this item. One last thing to
-			# do: bundle that back into an arrayref, because Reasons.
-			Future->needs_all(@pending)->transform(
-				done => sub { [ @_ ] }
-			)
-		})
-	};
-}
-
-sub apply_view_transformations {
-	my ($self, $line, $col, $v) = @_;
-	$v = $_->($line, $col, $v) for @{$self->{view_transformations}};
-	$v
-}
 
 sub render_row {
 	my ($self, $rb, $rect, $row, $data) = @_;
@@ -659,62 +676,116 @@ sub render_row {
 	}
 }
 
-=head2 render_scrollbar
+=head2 on_scroll
 
-Render the scrollbar.
+Update row cache to reflect a scroll event.
 
 =cut
 
-sub render_scrollbar {
-	my ($self, $rb) = @_;
-	my $win = $self->window;
-	my $cols = $win->cols - 1;
+sub on_scroll {
+	my ($self, $offset) = @_;
+	die "undef offset" unless defined $offset;
 
-	my $h = $win->lines - 1;
+	# Our row cache is a scrolling fixed-size window over the previous,
+	# current and next page, so any removals need to be compensated by
+	# empty items at the other end
+	my @replace = (undef) x ($offset < 0 ? -$offset : $offset);
 
-	# Need to clear any line content first, since we may be overwriting part of
-	# the previous scrollbar rendering here
-	$rb->eraserect(
-		Tickit::Rect->new(
-			top => 1,
-			left => $cols,
-			right => $cols,
-			bottom => $h,
-		)
-	);
-	if(my ($min, $max) = map 1 + $_, $self->scroll_rows) {
-	# warn "sb min: $min, max $max h $h\n";
-		# Scrollbar should be shown, since we don't have all rows visible on the screen at once
-		$rb->vline_at(1, $min - 1, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $min > 1;
-		$rb->vline_at($min, $max, $cols, LINE_DOUBLE, $self->get_style_pen('scroll'), CAP_BOTH);
-		$rb->vline_at($max + 1, $h, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $max < $h;
+	my @removed;
+	if($offset > 0) {
+		# Scrolling down means we throw away the first N rows
+		@removed = splice @{$self->{row_cache}}, 0, $offset;
+		push @{$self->{row_cache}}, @replace;
 	} else {
-		# Placeholder scrollbar - just render it as empty
-		$rb->vline_at(1, $h, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH);
+		# and in the other direction, last N rows
+		@removed = splice @{$self->{row_cache}}, @{$self->{row_cache}} + $offset, -$offset, @replace;
+		unshift @{$self->{row_cache}}, @replace;
 	}
+
+	# Any items that were still in progress are no longer required, make
+	# sure we cancel them to avoid unnecessary work.
+	$_->cancel for grep defined($_) && !$_->is_ready, @removed;
+
+	return $self if exists $self->{cache_primer};
+	$self->{cache_primer} = 1;
+	$self->window->tickit->later(sub {
+		# Prime the cache for the missing entries
+		$self->row_cache($self->idx_from_row_cache($_)) for grep !defined($self->{row_cache}[$_]), 0..$#{$self->{row_cache}}; 
+		delete $self->{cache_primer};
+	});
+	$self
 }
 
-=head2 render_cell
+=head2 fold_future
 
-Render a given cell.
+Helper method to apply a series of coderefs to a value.
 
 =cut
 
-sub render_cell {
-	my $self = shift;
-	my $rb = shift;
-	my $args = shift;
+sub fold_future {
+	my ($self, $prefix, $item, @steps) = @_;
+	return Future->wrap($item) unless @steps;
+	repeat {
+		my $code = shift;
+		Future->call(sub { $code->(@$prefix, $item) })->on_done(sub {
+			$item = shift
+		})
+	} foreach => \@steps
+}
 
-	# Trim first
-	my $txt = textwidth($args->{text}) > $args->{value}
-	   ? substrwidth $args->{text}, 0, $args->{value}
-	   : $args->{text};
+=head2 row_cache
 
-	my ($pre, undef, $post) = align textwidth($txt), $args->{value}, $args->{align};
-	$rb->text(' ' x $pre, $args->{style}) if $pre;
-	$rb->text($txt, $args->{style});
-	$rb->text(' ' x $post, $args->{style}) if $post;
-	return $self;
+Row cache accessor.
+
+=cut
+
+sub row_cache {
+	my ($self, $row) = @_;
+	$self->{row_cache}[$self->row_cache_idx($row)] ||= do {
+		$self->adapter->get(
+			items => [$row],
+		)->then(sub {
+			# We have an item from storage. No idea what it is, could be an
+			# object, hashref, arrayref... the item transformations will
+			# convert it into something usable
+			my ($item) = @{ $_[0] };
+			return Future->fail('no such element') unless $item;
+
+			# Somewhat tedious way to reduce() a Future chain
+			$self->fold_future([ $row ], $item, @{$self->{item_transformations}})
+		})->then(sub {
+			# Our item is now accessible as an arrayref, start working on the columns
+			my $item = shift;
+			my @pending;
+			for my $col (0..$#{$self->{columns}}) {
+				my $cell = $item->[$col];
+				push @pending, (
+					$self->fold_future([ $row, $col ], $cell, @{$self->{columns}[$col]{transform} || [] })
+				)->then(sub {
+					# hey look at all these optimisations we're not doing
+					$self->fold_future([ $row, $col ], shift, @{$self->{cell_transformations}{"$row,$col"} || []})
+				})->on_fail(sub { warn "Fail: @_\n" })
+			}
+			# our transform at the tail of each Future chain should ensure that we
+			# end up with a helpful list of cells for this item. One last thing to
+			# do: bundle that back into an arrayref, because Reasons.
+			Future->needs_all(@pending)->transform(
+				done => sub { [ @_ ] }
+			)
+		})
+	};
+}
+
+=head2 apply_view_transformations
+
+Apply the transformations just before we render. Can return anything we know how to render.
+
+=cut
+
+sub apply_view_transformations {
+	my ($self, $line, $col, $v) = @_;
+	$v = $_->($line, $col, $v) for @{$self->{view_transformations}};
+	$v
 }
 
 =head2 reshape
@@ -792,28 +863,6 @@ sub expose_rows {
 		lines => 2,
 		cols => $cols
 	), @_;
-}
-
-=head2 highlight_row
-
-Returns the index of the currently-highlighted row.
-
-=cut
-
-sub highlight_row {
-	my $self = shift;
-	return $self->{highlight_row};
-}
-
-=head2 highlight_visible_row
-
-Returns the position of the highlighted row taking scrollbar into account.
-
-=cut
-
-sub highlight_visible_row {
-	my $self = shift;
-	return $self->{highlight_row} - $self->row_offset;
 }
 
 =head2 scroll_highlight
