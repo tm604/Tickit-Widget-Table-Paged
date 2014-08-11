@@ -50,6 +50,76 @@ available memory, such as a database table or procedurally-generated data.
 See L<Adapter::Async::OrderedList::Array> if your data is stored in a Perl
 array. Other subclasses may be available if you have a different source.
 
+=head2 Transformations
+
+Apply to:
+* Row
+* Column
+* Cell
+
+Row:
+
+This takes the original data item for the row, and returns one of the following:
+
+* Future - when resolved, the items will be used as cells
+* Arrayref - holds the cells directly
+
+The data item can be anything - an array-backed adapter would return an arrayref, ORM will give you an object for basic collections.
+
+Any number of cells may be returned from a row transformation, but you may get odd results if the cell count is not consistent.
+
+An array adapter needs no row transformation, due to the arrayref behaviour. You could provide a Future alternative:
+
+ $row->apply_transformation(sub {
+  my ($item) = @_;
+  Future->wrap(
+   @$item
+  )
+ });
+
+For the ORM example, something like this:
+
+ $row->apply_transformation(sub {
+  my ($item) = @_;
+  Future->wrap(
+   map $item->$_, qw(id name created)
+  )
+ });
+
+Column:
+
+Column transformations are used to apply styles and formats.
+
+You get an input value, and return either a string or a Future.
+
+Example date+colour transformation on column:
+
+ $col->apply_transformation(sub {
+  my $v = shift;
+  Future->wrap(
+   String::Tagged->new(strftime '%Y-%m-%d', $v)
+   ->apply_tag(0, 4, b => 1)
+   ->apply_tag(5, 1, fg => 8)
+   ->apply_tag(6, 2, fg => 4)
+   ->apply_tag(9, 1, fg => 8)
+  );
+ });
+
+Cell transformations are for cases where you need fine control over individual components. They operate similarly to column transformations,
+taking the input value and returning either a string or a Future.
+
+Typical example would be a spreadsheet:
+
+ $cell->apply_transformation(sub {
+  my $v = shift;
+  return $v unless blessed $v;
+  return eval $v if $v->is_formula;
+  return $v->to_string if $v->is_formatted;
+  return "$v"
+ });
+
+
+
 =cut
 
 use Tickit::RenderBuffer qw(LINE_SINGLE LINE_DOUBLE CAP_BOTH);
