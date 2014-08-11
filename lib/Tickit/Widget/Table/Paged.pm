@@ -445,6 +445,14 @@ Returns the number of lines in the body.
 
 sub body_lines { $_[0]->window->lines - $_[0]->header_lines }
 
+=head2 body_cols
+
+Returns the number of columns in the body.
+
+=cut
+
+sub body_cols { $_[0]->window->cols - 1 }
+
 =head2 idx_from_row
 
 Returns a storage index from a body row index.
