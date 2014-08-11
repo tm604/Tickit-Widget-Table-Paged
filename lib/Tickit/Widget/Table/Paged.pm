@@ -1044,84 +1044,6 @@ sub move_highlight {
 	$self
 }
 
-=head2 key_previous_row
-
-Go to the previous row.
-
-=cut
-
-sub key_previous_row {
-	my $self = shift;
-	return $self unless my $win = $self->window;
-	return $self if $self->{highlight_row} <= 0;
-
-	return $self->move_highlight(-1) if $self->highlight_visible_row >= 1;
-	return $self->scroll_highlight(-1);
-}
-
-=head2 key_next_row
-
-Move to the next row.
-
-=cut
-
-sub key_next_row {
-	my $self = shift;
-	return $self unless my $win = $self->window;
-	return $self if $self->{highlight_row} >= $self->row_count - 1;
-
-	return $self->move_highlight(1) if $self->highlight_visible_row < $win->lines - 2;
-	return $self->scroll_highlight(1);
-}
-
-=head2 key_first_row
-
-Move to the first row.
-
-=cut
-
-sub key_first_row {
-	my $self = shift;
-	$self->{highlight_row} = 0;
-	$self->{row_offset} = 0;
-	$self->redraw;
-}
-
-=head2 key_last_row
-
-Move to the last row.
-
-=cut
-
-sub key_last_row {
-	my $self = shift;
-	$self->{highlight_row} = $self->row_count - 1;
-	$self->{row_offset} = $self->row_count > $self->scroll_dimension ? -1 + $self->row_count - $self->scroll_dimension : 0;
-	$self->redraw;
-}
-
-=head2 key_previous_page
-
-Go up a page.
-
-=cut
-
-sub key_previous_page {
-	my $self = shift;
-	$self->scroll_highlight(-$self->scroll_dimension);
-}
-
-=head2 key_next_page
-
-Go down a page.
-
-=cut
-
-sub key_next_page {
-	my $self = shift;
-	$self->scroll_highlight($self->scroll_dimension);
-}
-
 =head2 scroll_position
 
 Current vertical scrollbar position.
@@ -1198,79 +1120,6 @@ sub scroll_dimension {
 	my $self = shift;
 	return 1 unless my $win = $self->window;
 	$win->lines - 2;
-}
-
-=head2 key_next_column
-
-Move to the next column.
-
-=cut
-
-sub key_next_column { }
-
-=head2 key_previous_column
-
-Move to the previous column.
-
-=cut
-
-sub key_previous_column { }
-
-=head2 key_first_column
-
-Move to the first column.
-
-=cut
-
-sub key_first_column { }
-
-=head2 key_last_column
-
-Move to the last column.
-
-=cut
-
-sub key_last_column { }
-
-=head2 key_activate
-
-Call the C< on_activate > coderef with either the highlighted item, or the selected
-items if we're in multiselect mode.
-
- $on_activate->([ row indices ], [ items... ])
-
-The items will be as returned by the storage adapter, and will not have any of the
-data transformations applied.
-
-=cut
-
-sub key_activate {
-	my $self = shift;
-	if(my $code = $self->{on_activate}) {
-		my @selected = 
-			  $self->multi_select
-			? (sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}})
-			: ($self->highlight_row);
-		my $f; $f = $self->adapter->get(
-			items => \@selected,
-		)->then(sub {
-			$code->(\@selected, shift)
-		})->on_ready(sub { undef $f });
-	}
-	$self
-}
-
-=head2 key_select_toggle
-
-Toggle selected row.
-
-=cut
-
-sub key_select_toggle {
-	my $self = shift;
-	return $self unless $self->multi_select;
-	$self->{selected}{$self->highlight_row} = $self->{selected}{$self->highlight_row} ? 0 : 1;
-	$self
 }
 
 =head2 on_adapter_change
@@ -1358,6 +1207,159 @@ sub on_clear_event {
 	if(my $win = $self->window) {
 		$win->expose;
 	}
+}
+
+=head1 METHODS - Key bindings
+
+=head2 key_previous_row
+
+Go to the previous row.
+
+=cut
+
+sub key_previous_row {
+	my $self = shift;
+	return $self unless my $win = $self->window;
+	return $self if $self->{highlight_row} <= 0;
+
+	return $self->move_highlight(-1) if $self->highlight_visible_row >= 1;
+	return $self->scroll_highlight(-1);
+}
+
+=head2 key_next_row
+
+Move to the next row.
+
+=cut
+
+sub key_next_row {
+	my $self = shift;
+	return $self unless my $win = $self->window;
+	return $self if $self->{highlight_row} >= $self->row_count - 1;
+
+	return $self->move_highlight(1) if $self->highlight_visible_row < $win->lines - 2;
+	return $self->scroll_highlight(1);
+}
+
+=head2 key_first_row
+
+Move to the first row.
+
+=cut
+
+sub key_first_row {
+	my $self = shift;
+	$self->{highlight_row} = 0;
+	$self->{row_offset} = 0;
+	$self->redraw;
+}
+
+=head2 key_last_row
+
+Move to the last row.
+
+=cut
+
+sub key_last_row {
+	my $self = shift;
+	$self->{highlight_row} = $self->row_count - 1;
+	$self->{row_offset} = $self->row_count > $self->scroll_dimension ? -1 + $self->row_count - $self->scroll_dimension : 0;
+	$self->redraw;
+}
+
+=head2 key_previous_page
+
+Go up a page.
+
+=cut
+
+sub key_previous_page {
+	my $self = shift;
+	$self->scroll_highlight(-$self->scroll_dimension);
+}
+
+=head2 key_next_page
+
+Go down a page.
+
+=cut
+
+sub key_next_page {
+	my $self = shift;
+	$self->scroll_highlight($self->scroll_dimension);
+}
+
+=head2 key_next_column
+
+Move to the next column.
+
+=cut
+
+sub key_next_column { }
+
+=head2 key_previous_column
+
+Move to the previous column.
+
+=cut
+
+sub key_previous_column { }
+
+=head2 key_first_column
+
+Move to the first column.
+
+=cut
+
+sub key_first_column { }
+
+=head2 key_last_column
+
+Move to the last column.
+
+=cut
+
+sub key_last_column { }
+
+=head2 key_activate
+
+Call the C< on_activate > coderef with either the highlighted item, or the selected
+items if we're in multiselect mode.
+
+ $on_activate->([ row indices ], [ items... ])
+
+The items will be as returned by the storage adapter, and will not have any of the
+data transformations applied.
+
+=cut
+
+sub key_activate {
+	my $self = shift;
+	if(my $code = $self->{on_activate}) {
+		my @selected = 
+			  $self->multi_select
+			? (sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}})
+			: ($self->highlight_row);
+		my $f; $f = $self->adapter->get(
+			items => \@selected,
+		)->then(sub {
+			$code->(\@selected, shift)
+		})->on_ready(sub { undef $f });
+	}
+	$self
+}
+
+=head2 key_select_toggle
+
+Toggle selected row.
+
+=cut
+
+sub key_select_toggle {
+	my $self = shift;
+	return $self unless $self->multi_select;
+	$self->{selected}{$self->highlight_row} = $self->{selected}{$self->highlight_row} ? 0 : 1;
+	$self
 }
 
 =head1 METHODS - Filtering
