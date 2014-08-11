@@ -1236,14 +1236,6 @@ sub on_splice_event {
 	}
 }
 
-{ # Class used for tagging rows as hidden
-	package 
-		Tickit::Widget::Table::Paged::HiddenRow;
-}
-{ # Class used for tagging rows as visible
-	package
-		Tickit::Widget::Table::Paged::VisibleRow;
-}
 
 1;
 
