@@ -1,0 +1,7 @@
+=encoding utf8
+
+=head1 NAME
+
+Tickit::Widget::Table::FAQ - some suggestions for using L<Tickit::Widget::Table::Paged>
+
+=cut
