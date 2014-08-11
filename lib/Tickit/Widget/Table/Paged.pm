@@ -211,10 +211,27 @@ sub is_row_visible {
 	my $self = shift;
 	1
 }
+=head2 expose_row
+
+Expose the given row (provided as an index into the underlying storage).
+
+ $tbl->expose_row(14);
+
+=cut
 
 sub expose_row {
-	my $self = shift;
-	$self->window->expose;
+	my ($self, $idx) = @_;
+	if(my $win = $self->window) {
+		my $row = $self->row_from_idx($idx);
+		return $self unless $row >= 0;
+		my $rect = Tickit::Rect->new(
+			top   => $row,
+			left  => 0,
+			lines => 1,
+			cols  => $win->cols
+		)->intersect($self->body_rect);
+		$win->expose($rect) if $rect;
+	}
 	return $self;
 }
 
