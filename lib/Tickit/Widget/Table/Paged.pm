@@ -1112,30 +1112,28 @@ sub key_last_column { }
 
 =head2 key_activate
 
-Activate the highlighted item.
+Call the C< on_activate > coderef with either the highlighted item, or the selected
+items if we're in multiselect mode.
+
+ $on_activate->([ row indices ], [ items... ])
+
+The items will be as returned by the storage adapter, and will not have any of the
+data transformations applied.
 
 =cut
 
 sub key_activate {
 	my $self = shift;
 	if(my $code = $self->{on_activate}) {
-		my $idx = $self->highlight_row;
-		if($self->multi_select) {
-			my @selected = sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}};
-			# unshift @selected, $idx;
-			my $f; $f = $self->adapter->get(
-				items => \@selected,
-			)->then(sub {
-				$code->(\@selected, shift)
-			})->on_ready(sub { undef $f });
-		} else {
-			my $f; $f = $self->adapter->get(
-				items => [ $idx ],
-			)->then(sub {
-				my $items = shift;
-				$code->($idx, @$items)
-			})->on_ready(sub { undef $f });
-		}
+		my @selected = 
+			  $self->multi_select
+			? (sort { $a <=> $b } grep $self->{selected}{$_}, keys %{$self->{selected}})
+			: ($self->highlight_row);
+		my $f; $f = $self->adapter->get(
+			items => \@selected,
+		)->then(sub {
+			$code->(\@selected, shift)
+		})->on_ready(sub { undef $f });
 	}
 	$self
 }
@@ -1150,90 +1148,6 @@ sub key_select_toggle {
 	my $self = shift;
 	return $self unless $self->multi_select;
 	$self->{selected}{$self->highlight_row} = $self->{selected}{$self->highlight_row} ? 0 : 1;
-	$self
-}
-
-# NYI
-sub row_visibility_changed {
-	my $self = shift;
-}
-
-=head2 row_visibility
-
-Sets the visibility of the given row (by index).
-
-Example:
-
- # Make row 5 hidden
- $tbl->row_visibility(5, 0)
- # Show row 0
- $tbl->row_visibility(0, 1)
-
-=cut
-
-sub row_visibility {
-	my ($self, $idx, $visible) = @_;
-	my $row = $self->adapter->get($idx);
-	my $prev = ref($row);
-	$prev = 'Tickit::Widget::Table::Paged::VisibleRow' if $prev eq 'ARRAY';
-	my $next = $visible
-	? 'Tickit::Widget::Table::Paged::VisibleRow'
-	: 'Tickit::Widget::Table::Paged::HiddenRow';
-	bless $row, $next;
-	$self->row_visibility_changed($idx) unless $self->{IS_FILTER} || ($prev eq $next);
-	$row
-}
-
-=head2 filter
-
-This will use the given coderef to set the visibility of each row in the table.
-The coderef will be called once for each row, and should return true for rows
-which should be visible, false for rows to be hidden.
-
-The coderef currently takes a single parameter: an arrayref representing the
-columns of the row to be processed.
-
- # Hide all rows where the second column contains the text 'OK'
- $tbl->filter(sub { shift->[1] ne 'OK' });
-
-Note that this does not affect row selection: if the multiselect flag is enabled,
-it is possible to filter out rows that are selected. This behaviour is by design
-(the idea was to allow union select via different filter criteria), call the
-L</unselect_hidden_rows> method after filtering if you want to avoid this.
-
-Also note that this is a one-shot operation. If you add or change data, you'll
-need to reapply the filter operation manually.
-
-=cut
-
-sub filter {
-	my ($self, $filter) = @_;
-	# Defer any updates until we've finished making changes
-	local $self->{IS_FILTER} = 1;
-	for my $idx (0..$self->adapter->count - 1) {
-		my $row = $self->adapter->get($idx);
-		$self->row_visibility($idx, $filter->($row));
-	}
-	$self->redraw;
-}
-
-sub apply_filters_to_row {
-	my ($self, $idx) = @_;
-}
-
-=head2 unselect_hidden_rows
-
-Helper method to mark any hidden rows as unselected.
-Call this after L</filter> if you want to avoid confusing
-users with invisible selected rows.
-
-=cut
-
-sub unselect_hidden_rows {
-	my $self = shift;
-	delete @{$self->{selected}}{
-		grep ref($self->adapter->get($_))->isa('Tickit::Widget::Table::Paged::HiddenRow'), 0..$self->adapter->count-1
-	};
 	$self
 }
 
@@ -1322,6 +1236,96 @@ sub on_clear_event {
 	if(my $win = $self->window) {
 		$win->expose;
 	}
+}
+
+=head1 METHODS - Filtering
+
+Very broken. Ignore these for now. Sorry.
+
+=cut
+
+# NYI
+sub row_visibility_changed {
+	my $self = shift;
+}
+
+=head2 row_visibility
+
+Sets the visibility of the given row (by index).
+
+Example:
+
+ # Make row 5 hidden
+ $tbl->row_visibility(5, 0)
+ # Show row 0
+ $tbl->row_visibility(0, 1)
+
+=cut
+
+sub row_visibility {
+	my ($self, $idx, $visible) = @_;
+	my $row = $self->adapter->get($idx);
+	my $prev = ref($row);
+	$prev = 'Tickit::Widget::Table::Paged::VisibleRow' if $prev eq 'ARRAY';
+	my $next = $visible
+	? 'Tickit::Widget::Table::Paged::VisibleRow'
+	: 'Tickit::Widget::Table::Paged::HiddenRow';
+	bless $row, $next;
+	$self->row_visibility_changed($idx) unless $self->{IS_FILTER} || ($prev eq $next);
+	$row
+}
+
+=head2 filter
+
+This will use the given coderef to set the visibility of each row in the table.
+The coderef will be called once for each row, and should return true for rows
+which should be visible, false for rows to be hidden.
+
+The coderef currently takes a single parameter: an arrayref representing the
+columns of the row to be processed.
+
+ # Hide all rows where the second column contains the text 'OK'
+ $tbl->filter(sub { shift->[1] ne 'OK' });
+
+Note that this does not affect row selection: if the multiselect flag is enabled,
+it is possible to filter out rows that are selected. This behaviour is by design
+(the idea was to allow union select via different filter criteria), call the
+L</unselect_hidden_rows> method after filtering if you want to avoid this.
+
+Also note that this is a one-shot operation. If you add or change data, you'll
+need to reapply the filter operation manually.
+
+=cut
+
+sub filter {
+	my ($self, $filter) = @_;
+	# Defer any updates until we've finished making changes
+	local $self->{IS_FILTER} = 1;
+	for my $idx (0..$self->adapter->count - 1) {
+		my $row = $self->adapter->get($idx);
+		$self->row_visibility($idx, $filter->($row));
+	}
+	$self->redraw;
+}
+
+sub apply_filters_to_row {
+	my ($self, $idx) = @_;
+}
+
+=head2 unselect_hidden_rows
+
+Helper method to mark any hidden rows as unselected.
+Call this after L</filter> if you want to avoid confusing
+users with invisible selected rows.
+
+=cut
+
+sub unselect_hidden_rows {
+	my $self = shift;
+	delete @{$self->{selected}}{
+		grep ref($self->adapter->get($_))->isa('Tickit::Widget::Table::Paged::HiddenRow'), 0..$self->adapter->count-1
+	};
+	$self
 }
 
 1;
