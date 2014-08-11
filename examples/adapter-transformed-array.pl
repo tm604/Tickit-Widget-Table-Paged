@@ -18,7 +18,7 @@ vbox {
 		$w->add_column(
 			label => 'Created',
 			align => 'right',
-			#width => 20,
+			width => 20,
 			transform => sub {
 				my ($row, $col, $cell) = @_;
 				Future->wrap(
