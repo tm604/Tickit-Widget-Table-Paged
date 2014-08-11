@@ -207,10 +207,6 @@ sub clear {
 	$self
 }
 
-sub is_row_visible {
-	my $self = shift;
-	1
-}
 =head2 expose_row
 
 Expose the given row (provided as an index into the underlying storage).
