@@ -555,16 +555,29 @@ sub render_header {
 		or return $self;
 
 	$rb->goto(0, 0);
-	for (@{$self->{columns}}) {
-		if(($_->{type} // '') eq 'padding') {
-			$rb->text(' ' x $_->{value}, $self->get_style_pen('padding'));
-		} else {
-			$_->{style} = $self->get_style_pen('header');
-			local $_->{text} = $_->{label} // '';
-			$self->render_cell($rb, $_);
-		}
+	for my $col (0..$#{$self->{columns}}) {
+		my $def = $self->{columns}[$col];
+		$self->render_header_cell($rb, $def);
 	}
-	$rb->text(' ', $self->get_style_pen('header')) if $self->vscroll;
+	$rb->erase_to($self->window->cols, $self->get_style_pen('padding'));
+}
+
+=head2 render_header_cell
+
+Render a specific header cell.
+
+=cut
+
+sub render_header_cell {
+	my ($self, $rb, $def) = @_;
+	my $base_pen = $self->get_style_pen(
+		'header'
+	);
+	$rb->erase_to($def->{start}, $base_pen);
+	my ($pre, undef, $post) = align textwidth($def->{label} // ''), $def->{value}, $def->{align};
+	$rb->erase($pre, $base_pen) if $pre;
+	$rb->text($def->{label} // '', $base_pen);
+	$rb->erase($post, $base_pen) if $post;
 }
 
 =head2 render_scrollbar
