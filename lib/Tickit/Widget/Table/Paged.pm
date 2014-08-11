@@ -607,7 +607,6 @@ sub render_scrollbar {
 		)
 	);
 	if(my ($min, $max) = map 1 + $_, $self->scroll_rows) {
-	# warn "sb min: $min, max $max h $h\n";
 		# Scrollbar should be shown, since we don't have all rows visible on the screen at once
 		$rb->vline_at(1, $min - 1, $cols, LINE_SINGLE, $self->get_style_pen('scrollbar'), CAP_BOTH) if $min > 1;
 		$rb->vline_at($min, $max, $cols, LINE_DOUBLE, $self->get_style_pen('scroll'), CAP_BOTH);
