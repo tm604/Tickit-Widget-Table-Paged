@@ -68,8 +68,13 @@ Row:
 
 This takes the original data item for the row, and returns one of the following:
 
-* Future - when resolved, the items will be used as cells
-* Arrayref - holds the cells directly
+=over 4
+
+=item * Future - when resolved, the items will be used as cells
+
+=item * Arrayref - holds the cells directly
+
+=back
 
 The data item can be anything - an array-backed adapter would return an arrayref, ORM will give you an object for basic collections.
 
