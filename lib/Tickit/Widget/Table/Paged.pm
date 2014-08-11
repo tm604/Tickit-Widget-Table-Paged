@@ -876,7 +876,6 @@ sub distribute_columns {
 	my $cols = $self->window->cols;
 	--$cols if $self->vscroll;
 	distribute $cols, @spacing;
-	@{$self->{columns}[$_]}{qw(start value)} = @{$spacing[$_]}{qw(start value)};
 	$self
 }
 
